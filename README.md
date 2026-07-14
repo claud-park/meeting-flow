@@ -1,0 +1,112 @@
+# Meeting Flow 🎙
+
+맥북에서 `미팅 시작` / `미팅 끝` 한 마디로 돌아가는 회의록 자동화 파이프라인.
+
+```
+미팅 시작 ─→ Slack DND + 상태 "🎙 회의 중" ─→ ffmpeg 녹음 시작
+미팅 끝  ─→ 녹음 종료 ─→ 캘린더 이벤트명 바인딩 ─→ NCP 업로드
+         ─→ CLOVA Speech 화자분리 ─→ Claude 요약 ─→ Obsidian 저장 ─→ 완료 알림
+```
+
+## 1. 의존성 설치
+
+```bash
+brew install ffmpeg ical-buddy switchaudio-osx blackhole-2ch
+pip3 install boto3 requests
+```
+
+## 2. 오디오 장치 구성 (1회)
+
+**집계 장치 만들기** — `오디오 MIDI 설정` 앱 → 좌하단 `+` → **집계 기기 생성**
+→ `MacBook Pro 마이크` + `BlackHole 2ch` 체크. 이름 그대로 두면 됨.
+
+**다중 출력 장치 만들기** (화상회의용) — 같은 앱에서 **다중 출력 기기 생성**
+→ 평소 쓰는 스피커/헤드폰 + `BlackHole 2ch` 체크.
+
+**장치 인덱스 확인**:
+```bash
+ffmpeg -f avfoundation -list_devices true -i ""
+```
+`[AVFoundation indev]` audio 목록에서 **집계 장치(Aggregate Device)** 의 번호를
+`config.env`의 `AUDIO_DEVICE_INDEX`에 입력.
+
+## 3. Slack 토큰 (1회)
+
+1. https://api.slack.com/apps → Create New App (From scratch)
+2. OAuth & Permissions → **User Token Scopes**에 `dnd:write`, `users.profile:write` 추가
+3. Install to Workspace → `xoxp-` 로 시작하는 User OAuth Token 복사
+
+## 4. NCP 세팅 (1회)
+
+1. Object Storage 버킷 생성 (예: `meeting-recordings`)
+2. CLOVA Speech > **장문 인식 도메인** 생성 시 해당 버킷 연동
+3. 도메인 상세에서 `Invoke URL`, `Secret Key` 복사
+4. 마이페이지 > 인증키 관리에서 `Access Key` / `Secret Key` 발급 (Object Storage용)
+
+## 5. 캘린더 이름 확인
+
+```bash
+icalBuddy calendars
+```
+목록에서 회사 계정 캘린더의 정확한 이름을 `CALENDAR_NAME`에 입력.
+(Mac 캘린더 앱에 회사 Google 계정이 연동되어 있어야 함: 시스템 설정 > 인터넷 계정)
+
+> 처음 실행 시 macOS가 캘린더 접근 권한을 물으면 허용. 터미널/Raycast에
+> `시스템 설정 > 개인정보 보호 > 캘린더` 권한 필요.
+
+## 6. 설정 파일
+
+```bash
+cp config.env.example config.env
+# config.env 열어서 값 채우기
+chmod +x scripts/*.sh
+```
+
+## 7. Raycast 등록
+
+Raycast > Settings > Extensions > Script Commands > **Add Directories**
+→ 이 저장소의 `scripts/` 폴더 지정.
+
+- `미팅 시작` — 인자 없이 실행하면 오프라인 모드
+- `미팅 시작` + 인자 `화상` — 시스템 출력을 다중 출력 장치로 전환해 상대방 음성도 녹음
+- `미팅 끝` — 녹음 종료 후 백그라운드에서 회의록 생성 (완료되면 macOS 알림)
+
+각 커맨드에 단축키(예: `⌥⌘M` / `⌥⌘E`)를 걸어두면 더 빠름.
+
+## 트러블슈팅
+
+- **녹음 파일이 0바이트**: `AUDIO_DEVICE_INDEX`가 잘못됨. 장치 목록 다시 확인.
+  (블루투스 이어폰 연결 여부에 따라 인덱스가 바뀔 수 있음 — 집계 장치를 쓰면 영향 최소화)
+- **마이크 권한**: 최초 실행 시 `시스템 설정 > 개인정보 보호 > 마이크`에서 터미널/Raycast 허용.
+- **화상회의에서 상대방 소리가 안 들림**: 다중 출력 장치가 출력으로 선택되면 볼륨 조절이
+  안 되는 것이 정상(macOS 제약). 다중 출력 기기 설정에서 기본 장치의 드리프트 보정 체크.
+- **CLOVA 실패**: `~/Meetings/.process.log` 확인. 도메인-버킷 연동 여부가 흔한 원인.
+- **처리 실패 후 재시도**: `~/Meetings/.current_session.failed.json`을 인자로
+  `python3 scripts/process_meeting.py <파일>` 직접 실행하면 녹음본으로 재처리 가능.
+
+## 파일 구조
+
+```
+meeting-flow/
+├── config.env.example   # 설정 템플릿 (config.env로 복사)
+├── scripts/
+│   ├── meeting-start.sh    # Raycast: 미팅 시작
+│   ├── meeting-end.sh      # Raycast: 미팅 끝
+│   └── process_meeting.py  # 후처리 파이프라인
+├── templates/           # 회의 유형별 요약 템플릿
+│   ├── default.md          # 기본 (매칭 없을 때)
+│   ├── str-weekly.md       # STR Weekly
+│   ├── ax-champion-weekly.md
+│   └── ax-1on1.md          # [AX] 1-on-1
+└── README.md
+```
+
+## 요약 템플릿
+
+회의 제목(캘린더 이벤트명)에 따라 다른 요약 템플릿을 사용한다.
+`config.env`의 `TEMPLATE_RULES`에 `키워드:템플릿명`을 쉼표로 나열하면,
+제목에 키워드가 포함되는(대소문자 무시) 첫 규칙의 `templates/<템플릿명>.md`를
+프롬프트 형식으로 사용한다. 매칭이 없으면 `templates/default.md`.
+
+새 유형 추가: `templates/`에 md 파일을 만들고 `TEMPLATE_RULES`에 규칙 한 줄 추가.
+코드 수정 불필요.

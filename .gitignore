@@ -1,0 +1,10 @@
+# 시크릿 (API 키 포함 — 절대 커밋 금지)
+config.env
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
