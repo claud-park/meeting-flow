@@ -36,6 +36,17 @@ ffmpeg -f avfoundation -list_devices true -i ""
 2. OAuth & Permissions → **User Token Scopes**에 `dnd:write`, `users.profile:write` 추가
 3. Install to Workspace → `xoxp-` 로 시작하는 User OAuth Token 복사
 
+## 3.5. macOS 집중 모드 연동 (선택, 1회)
+
+Slack DND는 Slack 알림만 막으므로, 녹음(특히 화상 모드의 시스템 오디오)에
+다른 앱 알림음이 섞이는 걸 막으려면 macOS 집중 모드를 함께 켠다.
+
+1. 단축어 앱에서 두 개 생성:
+   - 켜기: `집중 모드 설정 > 방해금지 > 끌 때까지 켜기` (until: Turned Off)
+   - 끄기: 같은 동작에서 `끄기`
+2. 두 단축어 이름을 `config.env`의 `FOCUS_SHORTCUT_ON` / `FOCUS_SHORTCUT_OFF`에 입력.
+   비워두면 이 단계는 건너뛴다.
+
 ## 4. NCP 세팅 (1회)
 
 1. Object Storage 버킷 생성 (예: `meeting-recordings`)

@@ -39,7 +39,12 @@ curl -s -X POST "https://slack.com/api/users.profile.set" \
   -H "Content-Type: application/json; charset=utf-8" \
   -d '{"profile":{"status_text":"회의 중","status_emoji":":studio_microphone:","status_expiration":0}}' > /dev/null || true
 
-# 2) 화상 모드면 시스템 출력을 다중 출력 장치로 전환
+# 2) macOS 집중 모드 켜기 — 모든 앱 알림 차단 (녹음에 알림음 섞임 방지)
+if [[ -n "${FOCUS_SHORTCUT_ON:-}" ]]; then
+  shortcuts run "$FOCUS_SHORTCUT_ON" || true
+fi
+
+# 3) 화상 모드면 시스템 출력을 다중 출력 장치로 전환
 PREV_OUTPUT=""
 if [[ "$MODE" == "video" ]]; then
   if command -v SwitchAudioSource >/dev/null 2>&1; then
@@ -48,7 +53,7 @@ if [[ "$MODE" == "video" ]]; then
   fi
 fi
 
-# 3) ffmpeg 녹음 시작 (집계 장치 → 16kHz mono wav)
+# 4) ffmpeg 녹음 시작 (집계 장치 → 16kHz mono wav)
 START_TS="$(date +%s)"
 WAV_PATH="$MEETINGS_DIR/rec_$(date +%Y%m%d_%H%M%S).wav"
 
@@ -64,7 +69,7 @@ if ! kill -0 "$FFMPEG_PID" 2>/dev/null; then
   exit 1
 fi
 
-# 4) 세션 상태 저장
+# 5) 세션 상태 저장
 cat > "$STATE_FILE" <<EOF
 {
   "pid": $FFMPEG_PID,
@@ -75,4 +80,4 @@ cat > "$STATE_FILE" <<EOF
 }
 EOF
 
-echo "🎙 녹음 시작 (${MODE}) — Slack 알림 OFF"
+echo "🎙 녹음 시작 (${MODE}) — Slack DND·집중 모드 ON"

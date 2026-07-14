@@ -44,7 +44,12 @@ if [[ "$MODE" == "video" ]] && command -v SwitchAudioSource >/dev/null 2>&1; the
   [[ -n "$RESTORE_TO" ]] && SwitchAudioSource -t output -s "$RESTORE_TO" || true
 fi
 
-# 3) Slack DND 해제 + 상태 초기화
+# 3) macOS 집중 모드 끄기
+if [[ -n "${FOCUS_SHORTCUT_OFF:-}" ]]; then
+  shortcuts run "$FOCUS_SHORTCUT_OFF" || true
+fi
+
+# 4) Slack DND 해제 + 상태 초기화
 curl -s -X POST "https://slack.com/api/dnd.endSnooze" \
   -H "Authorization: Bearer $SLACK_USER_TOKEN" > /dev/null || true
 
@@ -53,7 +58,7 @@ curl -s -X POST "https://slack.com/api/users.profile.set" \
   -H "Content-Type: application/json; charset=utf-8" \
   -d '{"profile":{"status_text":"","status_emoji":""}}' > /dev/null || true
 
-# 4) 후처리 파이프라인을 백그라운드로 실행 (STT + 요약, 수 분 소요)
+# 5) 후처리 파이프라인을 백그라운드로 실행 (STT + 요약, 수 분 소요)
 # venv가 있으면 venv python 사용 (setup.sh가 생성)
 PYBIN="$SCRIPT_DIR/../.venv/bin/python3"
 [[ -x "$PYBIN" ]] || PYBIN="python3"
