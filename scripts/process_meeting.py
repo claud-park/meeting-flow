@@ -316,6 +316,71 @@ def load_template(cfg: dict, title: str) -> str:
     return path.read_text(encoding="utf-8").strip()
 
 
+def list_project_notes(cfg: dict) -> list:
+    """PROJECTS_DIR 하위(서브폴더 포함)의 md 노트 이름(stem) 목록"""
+    projects_dir = cfg.get("PROJECTS_DIR", "")
+    if not projects_dir:
+        return []
+    root = Path(projects_dir)
+    if not root.is_dir():
+        print(f"[projects] 디렉토리 없음: {root}")
+        return []
+    return sorted({p.stem for p in root.rglob("*.md") if p.stem})
+
+
+def parse_project_aliases(cfg: dict, valid: set) -> list:
+    """PROJECT_ALIASES="별칭:노트명,..." → [(별칭, 노트명)]. 없는 노트는 경고 후 제외"""
+    pairs = []
+    for rule in cfg.get("PROJECT_ALIASES", "").split(","):
+        alias, _, note = rule.strip().rpartition(":")
+        if not alias or not note:
+            continue
+        if note not in valid:
+            print(f"[projects] 별칭 '{alias}'의 노트 '{note}' 없음 → 무시")
+            continue
+        pairs.append((alias, note))
+    return pairs
+
+
+def build_project_block(cfg: dict) -> str:
+    """관련 프로젝트 선정 지시 + 후보 목록 + 별칭 힌트 프롬프트 블록"""
+    stems = list_project_notes(cfg)
+    if not stems:
+        return ""
+    aliases = parse_project_aliases(cfg, set(stems))
+    alias_lines = ""
+    if aliases:
+        alias_lines = "\n프로젝트 별칭 (회의에서 이렇게 불릴 수 있음):\n" + "\n".join(
+            f"- {alias} → {note}" for alias, note in aliases
+        )
+    return f"""
+회의록 맨 끝에는 "## 🔗 관련 프로젝트" 섹션을 추가하세요.
+회의 제목과 전사록 내용을 근거로, 아래 프로젝트 노트 목록에 있는 이름 그대로만 골라
+"- [[노트명]] (관련 근거 한 줄)" 형식으로 나열하세요.
+목록에 없는 이름을 새로 만들지 말고, 관련 프로젝트가 없으면 "없음"이라고만 적으세요.
+
+프로젝트 노트 목록: {", ".join(stems)}
+{alias_lines}
+"""
+
+
+def extract_related_projects(summary: str, valid: set) -> list:
+    """요약의 '관련 프로젝트' 섹션에서 실존 노트 [[링크]]만 추출"""
+    in_section = False
+    found = []
+    for line in summary.splitlines():
+        if line.startswith("## "):
+            in_section = "관련 프로젝트" in line
+            continue
+        if not in_section:
+            continue
+        for name in re.findall(r"\[\[([^\]|#]+)", line):
+            name = name.strip()
+            if name in valid and name not in found:
+                found.append(name)
+    return found
+
+
 def summarize(cfg: dict, title: str, transcript: str, attendees: list = None) -> str:
     attendee_block = ""
     if attendees:
@@ -332,8 +397,9 @@ def summarize(cfg: dict, title: str, transcript: str, attendees: list = None) ->
 """
 
     template = load_template(cfg, title)
+    project_block = build_project_block(cfg)
     prompt = f"""다음은 "{title}" 회의의 화자분리 전사록입니다. 아래 형식의 한국어 회의록으로 정리해주세요.
-{attendee_block}
+{attendee_block}{project_block}
 {template}
 
 전사록:
@@ -364,6 +430,7 @@ def summarize(cfg: dict, title: str, transcript: str, attendees: list = None) ->
 def write_obsidian_note(
     cfg: dict, title: str, start_dt: datetime, end_dt: datetime,
     summary: str, transcript: str, wav_path: Path, attendees: list = None,
+    projects: list = None,
 ) -> Path:
     vault = Path(cfg["OBSIDIAN_DIR"])
     vault.mkdir(parents=True, exist_ok=True)
@@ -376,12 +443,17 @@ def write_obsidian_note(
     participants = ""
     if attendees:
         participants = "participants: [" + ", ".join(attendees) + "]\n"
+    projects_line = ""
+    if projects:
+        projects_line = (
+            "projects: [" + ", ".join(f'"[[{p}]]"' for p in projects) + "]\n"
+        )
     content = f"""---
 title: "{title}"
 date: {date_str}
 time: {start_dt.strftime("%H:%M")} - {end_dt.strftime("%H:%M")}
 duration: {duration_min}분
-{participants}tags: [meeting]
+{participants}{projects_line}tags: [meeting]
 audio: "{wav_path}"
 ---
 
@@ -457,13 +529,18 @@ def main() -> None:
         if not transcript:
             raise RuntimeError("전사 결과가 비어 있음")
 
-        # 4. 요약 (참석자 명단 기반 실명 매핑 포함)
+        # 4. 요약 (참석자 실명 매핑 + 관련 프로젝트 선정 포함)
         summary = summarize(cfg, title, transcript, attendees)
+        projects = extract_related_projects(
+            summary, set(list_project_notes(cfg))
+        )
+        if projects:
+            print(f"[projects] 관련 프로젝트: {projects}")
 
         # 5. Obsidian 저장
         note = write_obsidian_note(
             cfg, title, start_dt, end_dt, summary, transcript, wav_path,
-            attendees,
+            attendees, projects,
         )
 
         state_file.unlink(missing_ok=True)
