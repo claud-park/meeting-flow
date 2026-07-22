@@ -69,7 +69,27 @@ if ! kill -0 "$FFMPEG_PID" 2>/dev/null; then
   exit 1
 fi
 
-# 5) 세션 상태 저장
+# 5) 무음 감지 프로브 (백그라운드, 논블로킹)
+# Aggregate Device가 열리기는 했지만 마이크 신호가 안 들어오는 경우(권한 꼬임,
+# 라우팅 문제 등) 회의가 끝날 때까지 모르고 통째로 날리는 사고를 막기 위해,
+# 녹음 시작 직후 같은 장치로 3초짜리 별도 프로브를 떠서 레벨을 확인한다.
+# -80dB 기준: 디지털 무음 바닥(-91dB)보다는 높고 정상 실내 잡음(-40~-60dB)보다는
+# 훨씬 낮아, 신호가 아예 안 들어오는 경우만 잡도록 잡은 값.
+(
+  sleep 3
+  PROBE_WAV="$MEETINGS_DIR/.silence_probe.wav"
+  ffmpeg -hide_banner -loglevel error -f avfoundation -i ":${AUDIO_DEVICE_INDEX}" \
+    -t 3 -ac 1 -ar 16000 -y "$PROBE_WAV" < /dev/null 2>>"$MEETINGS_DIR/.silence_probe.log"
+  MEAN_DB=$(ffmpeg -hide_banner -v info -i "$PROBE_WAV" -af volumedetect -f null - 2>&1 \
+    | sed -n 's/.*mean_volume: \(-\{0,1\}[0-9.]*\) dB.*/\1/p' | head -1)
+  rm -f "$PROBE_WAV"
+  echo "$(date '+%H:%M:%S') mean_volume=${MEAN_DB:-측정불가}dB" >> "$MEETINGS_DIR/.silence_probe.log"
+  if [[ -z "$MEAN_DB" ]] || awk -v v="$MEAN_DB" 'BEGIN{exit !(v <= -80)}'; then
+    osascript -e 'display notification "오디오 입력이 무음입니다 — 마이크 권한/Aggregate Device 라우팅을 확인하세요" with title "⚠️ 녹음 무음 감지"' || true
+  fi
+) > /dev/null 2>&1 &
+
+# 6) 세션 상태 저장
 cat > "$STATE_FILE" <<EOF
 {
   "pid": $FFMPEG_PID,
