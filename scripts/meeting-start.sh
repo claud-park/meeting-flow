@@ -59,9 +59,11 @@ fi
 # 오프라인 모드는 물리 마이크를 이름으로 찾아 직접 지정한다.
 REC_DEVICE_INDEX="$AUDIO_DEVICE_INDEX"
 if [[ "$MODE" == "offline" && -n "${OFFLINE_MIC_NAME:-}" ]]; then
+  # ffmpeg는 -list_devices 후 항상 0이 아닌 상태로 종료하므로(디바이스만 나열하고
+  # 실제 입력은 열지 않기 때문), set -e/pipefail에 걸리지 않도록 || true로 무시한다.
   MIC_IDX="$(ffmpeg -f avfoundation -list_devices true -i "" 2>&1 \
     | awk '/AVFoundation audio devices:/{f=1;next} f' \
-    | grep -F "] $OFFLINE_MIC_NAME" | head -1 | sed -E 's/.*\[([0-9]+)\] .*/\1/')"
+    | grep -F "] $OFFLINE_MIC_NAME" | head -1 | sed -E 's/.*\[([0-9]+)\] .*/\1/' || true)"
   if [[ -n "$MIC_IDX" ]]; then
     REC_DEVICE_INDEX="$MIC_IDX"
   else
