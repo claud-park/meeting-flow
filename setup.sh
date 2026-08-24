@@ -102,8 +102,9 @@ cat <<'GUIDE'
      - 인덱스 확인: ffmpeg -f avfoundation -list_devices true -i ""
        → 집계 기기 번호를 config.env의 AUDIO_DEVICE_INDEX에 입력
 
-  ② Raycast 등록:
-     Raycast 설정 > Extensions > + > Add Script Directory > 이 폴더의 scripts/ 선택
+  ② 트리거 등록:
+     - Raycast 쓰는 경우: Raycast 설정 > Extensions > + > Add Script Directory > 이 폴더의 scripts/ 선택
+     - Raycast 없는 경우: ./scripts/install-quick-actions.sh 실행 (자세한 내용은 README 7-B)
 
   ③ 설치 검증:
      ./doctor.sh    ← 모든 연결을 자동 점검합니다

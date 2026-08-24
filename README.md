@@ -74,7 +74,11 @@ cp config.env.example config.env
 chmod +x scripts/*.sh
 ```
 
-## 7. Raycast 등록
+## 7. 트리거 등록
+
+녹음 시작/종료를 실행할 방법을 하나 고른다. Raycast가 있으면 7-A, 없으면 7-B.
+
+### 7-A. Raycast
 
 Raycast > Settings > Extensions > Script Commands > **Add Directories**
 → 이 저장소의 `scripts/` 폴더 지정.
@@ -84,6 +88,29 @@ Raycast > Settings > Extensions > Script Commands > **Add Directories**
 - `미팅 끝` — 녹음 종료 후 백그라운드에서 회의록 생성 (완료되면 macOS 알림)
 
 각 커맨드에 단축키(예: `⌥⌘M` / `⌥⌘E`)를 걸어두면 더 빠름.
+
+### 7-B. Raycast 없이 (macOS Quick Action)
+
+Raycast 없이도 macOS 자체 기능(Automator Quick Action / Services)만으로 단축키를
+쓸 수 있다.
+
+```bash
+./scripts/install-quick-actions.sh
+```
+
+`~/Library/Services/`에 아래 3개 항목이 설치된다:
+
+- **미팅 시작** — 오프라인 모드
+- **미팅 시작 (화상)** — 화상회의 모드
+- **미팅 끝** — 녹음 종료 (참석자 인자가 필요하면 터미널에서
+  `scripts/meeting-end.sh "이름1,이름2"` 로 직접 실행)
+
+단축키 지정: **시스템 설정 > 키보드 > 키보드 단축키... > 서비스** 에서 위 3개
+항목을 찾아 원하는 단축키를 지정. Finder나 메뉴바의 서비스(⚙️) 메뉴에서도 바로
+실행 가능. 목록에 안 보이면 로그아웃 후 재로그인.
+
+> 리포지토리를 다른 경로로 옮기면 스크립트 경로가 설치 시점 기준으로 고정되어
+> 있으므로 `install-quick-actions.sh`를 다시 실행해야 한다.
 
 ## 트러블슈팅
 
@@ -102,9 +129,10 @@ Raycast > Settings > Extensions > Script Commands > **Add Directories**
 meeting-flow/
 ├── config.env.example   # 설정 템플릿 (config.env로 복사)
 ├── scripts/
-│   ├── meeting-start.sh    # Raycast: 미팅 시작
-│   ├── meeting-end.sh      # Raycast: 미팅 끝
-│   └── process_meeting.py  # 후처리 파이프라인
+│   ├── meeting-start.sh           # 미팅 시작 (Raycast/Quick Action 공용)
+│   ├── meeting-end.sh             # 미팅 끝 (Raycast/Quick Action 공용)
+│   ├── install-quick-actions.sh   # Raycast 없이 쓰기 위한 macOS Quick Action 설치
+│   └── process_meeting.py         # 후처리 파이프라인
 ├── templates/           # 회의 유형별 요약 템플릿
 │   ├── default.md          # 기본 (매칭 없을 때)
 │   ├── str-weekly.md       # STR Weekly
