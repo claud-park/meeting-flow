@@ -77,6 +77,11 @@ def test_applescript_date_expr_sets_components():
     assert "set hours of" in expr and "14" in expr
     assert "set minutes of" in expr and "30" in expr
     assert "set seconds of" in expr
+    lines = expr.splitlines()
+    i_day1 = lines.index("set day of theDate to 1")
+    i_month = lines.index("set month of theDate to 10")
+    i_day = lines.index("set day of theDate to 9")
+    assert i_day1 < i_month < i_day
 
 
 def test_build_calendar_event_script_targets_calendar():

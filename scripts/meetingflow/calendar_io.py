@@ -124,6 +124,7 @@ def applescript_date_expr(dt: datetime) -> str:
     변수명 theDate를 쓰며, 호출 측은 이 블록 뒤에서 theDate를 사용한다."""
     return "\n".join([
         "set theDate to current date",
+        "set day of theDate to 1",  # 31일 등에서 월 변경 시 다음 달로 넘치는 것을 방지
         f"set year of theDate to {dt.year}",
         f"set month of theDate to {dt.month}",
         f"set day of theDate to {dt.day}",
