@@ -11,6 +11,7 @@ Meeting Flow 후처리 파이프라인
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -435,7 +436,7 @@ def queue_timeblock_candidates(cfg: dict, note_path: Path, title: str, summary: 
             return None
         path = pending.new_pending(cfg, note_path, title, start_dt.date(), items, now)
         notify("타임블록 후보 📅", f"{title}: 타임블록 후보 {len(items)}건 (클릭하면 검토)",
-               execute=str(REVIEW_OPEN), group="meetingflow-review")
+               execute=shlex.quote(str(REVIEW_OPEN)), group="meetingflow-review")
         return path
     except Exception as e:  # noqa: BLE001
         print(f"[actions] 후보 생성 실패: {e}")

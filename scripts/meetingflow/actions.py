@@ -120,7 +120,8 @@ def _round30(n) -> int:
 def extract_action_items(cfg: dict, summary: str, attendees: list, meeting_date: date,
                          next_meeting_date: date | None, today: date | None = None,
                          call=None) -> list:
-    """요약의 액션 아이템 섹션에서 내 항목만 구조화해 반환. 실패하면 빈 리스트."""
+    """요약의 액션 아이템 섹션에서 내 항목만 구조화해 반환. MY_NAMES가 없거나 액션 아이템 섹션이 없으면 [].
+    Claude 호출·파싱이 2회 실패하면 ExtractionError."""
     call = call or call_claude
     today = today or date.today()
     names = config.my_names(cfg)

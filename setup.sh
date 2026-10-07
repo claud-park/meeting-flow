@@ -122,7 +122,7 @@ cat <<'GUIDE'
      (첫 실행 시 마이크/캘린더 권한 팝업 → 모두 허용)
 
   ⑤ 캘린더·미리알림 자동화 권한 (1회):
-     .venv/bin/python3 -m meetingflow.calendar_io --smoke   ← scripts/ 폴더에서 실행
+     ../.venv/bin/python3 -m meetingflow.calendar_io --smoke   ← scripts/ 폴더에서 실행
      (권한 팝업이 뜨면 허용. 테스트 이벤트를 만들고 바로 지웁니다)
 
 GUIDE
