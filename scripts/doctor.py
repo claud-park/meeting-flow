@@ -39,8 +39,10 @@ def main() -> int:
     print("[캘린더]")
     try:
         out = subprocess.run(["icalBuddy", "calendars"], capture_output=True, text=True, timeout=15).stdout
-        results.append(check(f"캘린더 '{cfg.get('CALENDAR_NAME')}' 보임", cfg.get("CALENDAR_NAME", "") in out,
-                             "시스템 설정 > 개인정보 보호 > 캘린더 에서 터미널 허용, 이름은 icalBuddy calendars 로 확인"))
+        hint = "시스템 설정 > 개인정보 보호 > 캘린더 에서 터미널 허용, 이름은 icalBuddy calendars 로 확인"
+        if not out.strip():
+            hint += " / 캘린더가 하나도 보이지 않음 — 권한 확인"
+        results.append(check(f"캘린더 '{cfg.get('CALENDAR_NAME')}' 보임", cfg.get("CALENDAR_NAME", "") in out, hint))
     except Exception as e:  # noqa: BLE001
         results.append(check("icalBuddy 실행", False, str(e)))
 

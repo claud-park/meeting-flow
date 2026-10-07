@@ -112,3 +112,13 @@ def test_run_applescript_raises_on_failure():
         assert "-1743" in str(e)
     else:
         raise AssertionError("CalendarError expected")
+
+
+def test_run_icalbuddy_logs_failure(capsys):
+    class R:
+        returncode = 1
+        stdout = ""
+        stderr = "calendar access denied"
+    out = cal.run_icalbuddy({"CALENDAR_NAME": "c"}, ["eventsToday"], run=lambda *a, **k: R())
+    assert out == ""
+    assert "[calendar] icalBuddy returncode=1 stderr=calendar access denied" in capsys.readouterr().out

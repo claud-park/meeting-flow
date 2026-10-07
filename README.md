@@ -137,6 +137,9 @@ Raycast 없이도 macOS 자체 기능(Automator Quick Action / Services)만으�
 미처리 후보는 다음 날 `MORNING_REMIND_AT`에 한 번 더 알림이 오고, `PENDING_EXPIRE_DAYS`가
 지나면 `.pending/expired/`로 옮겨진다. 첫 반영 때 macOS가 캘린더·미리알림 자동화 권한을 묻는다.
 
+⏰ 항목이 모두 실패하면 미리알림 목록 이름이 `REMINDER_LIST`와 다른 것일 수 있다.
+`osascript -e 'tell application "Reminders" to get name of lists'` 명령으로 실제 이름을 확인해 config.env에 적는다.
+
 ## 9. 회의 전 브리핑 (자동)
 
 launchd가 5분마다 `scripts/tick.py`를 실행한다 (`./scripts/install-launchd.sh`로 설치).
@@ -152,6 +155,7 @@ launchd가 5분마다 `scripts/tick.py`를 실행한다 (`./scripts/install-laun
 `brief: "[[...]]"`로 연결된다.
 
 점검: `python3 scripts/tick.py --dry-run` (지금 틱이 할 일 출력), `tail -f ~/Meetings/.tick.log`.
+설치 직후 회의 15분 전쯤 `~/Meetings/.tick.log`에 [calendar] 오류가 없는지 확인한다.
 
 ## 트러블슈팅
 

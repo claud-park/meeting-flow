@@ -82,7 +82,12 @@ def parse_icalbuddy_events(out: str, today: date | None = None) -> list[dict]:
 def run_icalbuddy(cfg: dict, args: list[str], run=subprocess.run) -> str:
     cmd = ICALBUDDY_BASE + ["-ic", cfg["CALENDAR_NAME"]] + args
     try:
-        return run(cmd, capture_output=True, text=True, timeout=30).stdout
+        res = run(cmd, capture_output=True, text=True, timeout=30)
+        stderr = (getattr(res, "stderr", "") or "").strip()
+        returncode = getattr(res, "returncode", 0)
+        if returncode != 0 or stderr:
+            print(f"[calendar] icalBuddy returncode={returncode} stderr={stderr[:200]}")
+        return res.stdout
     except Exception as e:  # noqa: BLE001
         print(f"[calendar] icalBuddy 실패: {e}")
         return ""
@@ -192,6 +197,20 @@ def _smoke() -> int:
     end tell
 end tell""")
     print(f"[calendar] smoke OK: '{cal_name}'에 이벤트 생성·삭제 성공")
+    list_name = cfg.get("REMINDER_LIST") or config.DEFAULTS["REMINDER_LIST"]
+    rem_marker = f"meeting-flow smoke reminder {int(start.timestamp())}"
+    try:
+        create_reminder(cfg, rem_marker, start, "meeting-flow --smoke 테스트, 자동 삭제됨")
+        run_applescript(f"""tell application "Reminders"
+    tell list {applescript_quote(list_name)}
+        delete (every reminder whose name is {applescript_quote(rem_marker)})
+    end tell
+end tell""")
+    except Exception as e:  # noqa: BLE001
+        print(f"[calendar] 미리알림 smoke 실패: {e}")
+        print("목록 이름 확인: osascript -e 'tell application \"Reminders\" to get name of lists'")
+        return 1
+    print(f"[calendar] smoke OK: 미리알림 목록 '{list_name}'에 생성·삭제 성공")
     return 0
 
 

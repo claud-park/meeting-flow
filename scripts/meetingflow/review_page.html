@@ -77,8 +77,9 @@ function itemRow(m, it) {
         <select class="kind"><option value="block" ${it.kind==="block"?"selected":""}>📅 타임블록</option><option value="reminder" ${it.kind==="reminder"?"selected":""}>⏰ 미리알림</option></select>
         <input type="date" class="date" value="${dateVal(s)}">
         <input type="time" class="time" step="1800" value="${timeVal(s)}">
-        <select class="dur">${[30,60,90,120,180].map(v=>`<option value="${v}" ${v===dur?"selected":""}>${v}분</option>`).join("")}</select>
-        <span class="meta">기한 ${esc(it.due || "없음")} ${badges.join(" ")}</span>
+        <select class="dur">${[...new Set([30,60,90,120,180,dur])].sort((a,b)=>a-b).map(v=>`<option value="${v}" ${v===dur?"selected":""}>${v}분</option>`).join("")}</select>
+        <span class="meta">기한 ${esc(it.due || "없음")} ${badges.join(" ")} <span class="clash-badge"></span></span>
+        ${it.error ? `<span class="badge warn err">실패: ${esc(it.error)}</span>` : ""}
       </div>
     </div>`;
   div.addEventListener("input", renderAgenda);
@@ -115,10 +116,17 @@ function renderAgenda() {
   const days = {};
   const add = (d, html) => { const k = dateVal(d); (days[k] ||= []).push([d, html]); };
   for (const ev of state.events) add(new Date(ev.start), `<div class="ev">${timeVal(new Date(ev.start))}-${timeVal(new Date(ev.end))} ${esc(ev.title)}</div>`);
+  const clashing = new Set();
   for (const p of props) {
-    const clash = state.events.some(ev => p.end && new Date(ev.start) < p.end && p.start < new Date(ev.end));
+    const clash = state.events.some(ev => p.end && new Date(ev.start) < p.end && p.start < new Date(ev.end))
+      || props.some(o => o !== p && p.end && o.end && o.start < p.end && p.start < o.end);  // 다른 체크된 후보와도 비교
+    if (clash) clashing.add(p);
     const t = p.end ? `${timeVal(p.start)}-${timeVal(p.end)}` : `${timeVal(p.start)} ⏰`;
     add(p.start, `<div class="ev mine ${clash ? "conf" : ""}">${t} ${esc(p.title)}</div>`);
+  }
+  for (const div of document.querySelectorAll(".item")) {
+    const p = props.find(x => x.pending_path === div.dataset.pending && x.id === div.dataset.id);
+    $(".clash-badge", div).innerHTML = p && clashing.has(p) ? '<span class="badge warn">겹침</span>' : "";
   }
   const base = new Date(state.now); base.setHours(0,0,0,0);
   for (let i = 0; i < 8; i++) {
