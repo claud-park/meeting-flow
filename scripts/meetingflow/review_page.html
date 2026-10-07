@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>타임블록 검토</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --line:#e3e6ea; --text:#1d2229; --muted:#6b7480; --accent:#2f6fed; --warn:#c2410c; }
+  body { margin:0; font:14px/1.5 -apple-system, "Apple SD Gothic Neo", sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:14px 20px; background:var(--card); border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
+  main { display:grid; grid-template-columns: 1fr 360px; gap:16px; padding:16px 20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:14px; }
+  h2 { margin:0 0 8px; font-size:15px; } h2 a { color:var(--muted); font-weight:normal; font-size:12px; margin-left:8px; }
+  .item { display:grid; grid-template-columns: 24px 1fr; gap:8px; padding:10px 0; border-top:1px solid var(--line); }
+  .item:first-of-type { border-top:none; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:6px; }
+  input[type=text] { width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:6px; font:inherit; }
+  input[type=date], input[type=time], select { padding:5px 6px; border:1px solid var(--line); border-radius:6px; font:inherit; }
+  .meta { color:var(--muted); font-size:12px; } .badge { font-size:11px; padding:1px 6px; border-radius:10px; background:#eef2ff; color:var(--accent); }
+  .badge.warn { background:#fff1e8; color:var(--warn); }
+  .day { margin-bottom:10px; } .day b { display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
+  .ev { font-size:12px; padding:2px 6px; border-left:3px solid #c7ccd3; margin:2px 0; background:#fafbfc; }
+  .ev.mine { border-left-color:var(--accent); background:#eef2ff; }
+  .ev.conf { border-left-color:var(--warn); }
+  button { padding:8px 16px; border:none; border-radius:8px; background:var(--accent); color:#fff; font:inherit; cursor:pointer; }
+  button[disabled] { opacity:.5; cursor:default; } #result { margin-left:12px; color:var(--muted); }
+  .empty { padding:40px; text-align:center; color:var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <div><strong>타임블록 검토</strong> <span class="meta" id="count"></span></div>
+  <div><button id="apply">반영</button><span id="result"></span></div>
+</header>
+<main>
+  <section id="list"></section>
+  <aside id="agenda" class="card"></aside>
+</main>
+<script>
+const WD = "일월화수목금토";
+let state = null;
+const $ = (s, el=document) => el.querySelector(s);
+const fmtDay = d => `${d.getMonth()+1}/${d.getDate()}(${WD[d.getDay()]})`;
+const pad = n => String(n).padStart(2, "0");
+const toDate = iso => iso ? new Date(iso) : null;
+const dateVal = d => d ? `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}` : "";
+const timeVal = d => d ? `${pad(d.getHours())}:${pad(d.getMinutes())}` : "";
+
+async function load() {
+  state = await (await fetch("/api/state")).json();
+  render();
+}
+
+function itemRow(m, it) {
+  const s = toDate(it.proposed_start), e = toDate(it.proposed_end);
+  const dur = s && e ? (e - s) / 60000 : (it.estimate_min || 30);
+  const div = document.createElement("div"); div.className = "item"; div.dataset.id = it.id; div.dataset.pending = m.pending_path;
+  const badges = [];
+  if (it.due_source === "next_meeting") badges.push('<span class="badge">다음 차수 기준</span>');
+  if (it.due_source === "none") badges.push('<span class="badge warn">기한 없음</span>');
+  if (it.overdue) badges.push('<span class="badge warn">기한 지남</span>');
+  if (it.conflict) badges.push('<span class="badge warn">겹침</span>');
+  if (it.owner === "공통") badges.push('<span class="badge">공통</span>');
+  div.innerHTML = `
+    <input type="checkbox" class="ok" ${it.default_checked ? "checked" : ""}>
+    <div>
+      <input type="text" class="title" value="${it.text.replace(/"/g, "&quot;")}">
+      <div class="row">
+        <select class="kind"><option value="block" ${it.kind==="block"?"selected":""}>📅 타임블록</option><option value="reminder" ${it.kind==="reminder"?"selected":""}>⏰ 미리알림</option></select>
+        <input type="date" class="date" value="${dateVal(s)}">
+        <input type="time" class="time" step="1800" value="${timeVal(s)}">
+        <select class="dur">${[30,60,90,120,180].map(v=>`<option value="${v}" ${v===dur?"selected":""}>${v}분</option>`).join("")}</select>
+        <span class="meta">기한 ${it.due || "없음"} ${badges.join(" ")}</span>
+      </div>
+    </div>`;
+  div.addEventListener("input", renderAgenda);
+  return div;
+}
+
+function render() {
+  const list = $("#list"); list.innerHTML = "";
+  let n = 0;
+  for (const m of state.meetings) {
+    const card = document.createElement("div"); card.className = "card";
+    card.innerHTML = `<h2>${m.title} <a href="${m.note_url}">${m.meeting_date} 회의록 열기</a></h2>`;
+    for (const it of m.items) { card.appendChild(itemRow(m, it)); n++; }
+    list.appendChild(card);
+  }
+  if (!n) { list.innerHTML = '<div class="empty">검토할 후보가 없습니다.</div>'; $("#apply").disabled = true; }
+  $("#count").textContent = n ? `후보 ${n}건` : "";
+  renderAgenda();
+}
+
+function proposals() {
+  return [...document.querySelectorAll(".item")].map(div => {
+    const kind = $(".kind", div).value, date = $(".date", div).value, time = $(".time", div).value;
+    const start = date && time ? new Date(`${date}T${time}:00`) : null;
+    const end = start && kind === "block" ? new Date(start.getTime() + Number($(".dur", div).value) * 60000) : null;
+    return { pending_path: div.dataset.pending, id: div.dataset.id, approve: $(".ok", div).checked,
+             kind, title: $(".title", div).value, start, end };
+  });
+}
+
+function renderAgenda() {
+  const ag = $("#agenda"); ag.innerHTML = `<h2>앞으로 7일 일정 <span class="meta">(${state.work_hours})</span></h2>`;
+  const props = proposals().filter(p => p.approve && p.start);
+  const days = {};
+  const add = (d, html) => { const k = dateVal(d); (days[k] ||= []).push([d, html]); };
+  for (const ev of state.events) add(new Date(ev.start), `<div class="ev">${timeVal(new Date(ev.start))}-${timeVal(new Date(ev.end))} ${ev.title}</div>`);
+  for (const p of props) {
+    const clash = state.events.some(ev => p.end && new Date(ev.start) < p.end && p.start < new Date(ev.end));
+    const t = p.end ? `${timeVal(p.start)}-${timeVal(p.end)}` : `${timeVal(p.start)} ⏰`;
+    add(p.start, `<div class="ev mine ${clash ? "conf" : ""}">${t} ${p.title}</div>`);
+  }
+  const base = new Date(state.now); base.setHours(0,0,0,0);
+  for (let i = 0; i < 8; i++) {
+    const d = new Date(base.getTime() + i * 86400000); const k = dateVal(d);
+    const rows = (days[k] || []).sort((a, b) => a[0] - b[0]).map(r => r[1]).join("") || '<div class="ev meta">일정 없음</div>';
+    ag.insertAdjacentHTML("beforeend", `<div class="day"><b>${fmtDay(d)}</b>${rows}</div>`);
+  }
+}
+
+$("#apply").addEventListener("click", async () => {
+  const body = proposals().map(p => ({ ...p, start: p.start ? localIso(p.start) : null, end: p.end ? localIso(p.end) : null }));
+  if (body.some(p => p.approve && !p.start)) { $("#result").textContent = "승인한 항목에 날짜·시간을 채워 주세요."; return; }
+  $("#apply").disabled = true; $("#result").textContent = "반영 중…";
+  const res = await (await fetch("/api/apply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })).json();
+  $("#result").textContent = res.error ? `오류: ${res.error}` : `${res.applied}건 반영, ${res.skipped}건 건너뜀${res.failed.length ? `, ${res.failed.length}건 실패` : ""}`;
+  await load(); $("#apply").disabled = false;
+  if (!state.meetings.length && !res.failed.length) setTimeout(() => fetch("/api/shutdown", { method: "POST" }).then(() => window.close()), 1500);
+});
+
+function localIso(d) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`; }
+load();
+</script>
+</body>
+</html>

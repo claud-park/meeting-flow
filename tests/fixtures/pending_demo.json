@@ -1,0 +1,17 @@
+{
+  "note_path": "/tmp/demo/Meetings/2026-10-07_1005_[11층 몰디브] STR Weekly.md",
+  "title": "[11층 몰디브] STR Weekly",
+  "meeting_date": "2026-10-07",
+  "created_at": "2026-10-07T11:40:00",
+  "renotified_on": null,
+  "items": [
+    {"id": "a1", "text": "CIS 발표 자료 에반젤리스트 형식으로 재구성", "owner": "Claud", "is_mine": true,
+     "due": "2026-10-14", "due_source": "explicit", "kind": "block", "estimate_min": 90},
+    {"id": "b2", "text": "법무 RNR 초안 작성", "owner": "Claud", "is_mine": true,
+     "due": "2026-10-14", "due_source": "next_meeting", "kind": "block", "estimate_min": 60},
+    {"id": "c3", "text": "Sentry 초대 수락 확인", "owner": "Claud", "is_mine": true,
+     "due": "2026-10-09", "due_source": "explicit", "kind": "reminder", "estimate_min": 0},
+    {"id": "d4", "text": "DBA 역할 담당자 확인", "owner": "공통", "is_mine": true,
+     "due": null, "due_source": "none", "kind": "reminder", "estimate_min": 0}
+  ]
+}
