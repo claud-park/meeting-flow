@@ -28,6 +28,7 @@ import requests
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # scripts/ 를 모듈 경로에
 from meetingflow.config import load_config  # noqa: E402
 from meetingflow.notify import notify  # noqa: E402
+from meetingflow.calendar_io import parse_icalbuddy_events  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -74,78 +75,6 @@ def get_meeting_info(cfg: dict, start_ts: int, end_ts: int) -> tuple:
     if best is None:
         return "회의", []
     return best["title"], best["attendees"]
-
-
-def parse_icalbuddy_events(out: str) -> list:
-    """icalBuddy 출력을 이벤트 블록 리스트로 파싱"""
-    from datetime import timedelta
-    events = []
-    cur = None
-    time_re = re.compile(r"(\d{4}-\d{2}-\d{2}).*?(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})")
-    # -nrd를 빼먹은 구버전 호환: 'today at 11:00 - 12:00' 형태도 해석
-    rel_re = re.compile(r"^(today|tomorrow|yesterday)\b(.*?)(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})", re.I)
-    today_s = datetime.now().strftime("%Y-%m-%d")
-
-    for line in out.splitlines():
-        if not line.strip():
-            continue
-        if not line.startswith((" ", "\t")):  # 제목 줄 (비들여쓰기)
-            cur = {"title": line.strip(), "attendees": [],
-                   "start_ts": None, "end_ts": None}
-            events.append(cur)
-            continue
-        if cur is None:
-            continue
-        stripped = line.strip()
-        if stripped.lower().startswith("attendees:"):
-            raw = stripped.split(":", 1)[1]
-            cur["attendees"] = [
-                a for a in (clean_attendee(x) for x in raw.split(",")) if a
-            ]
-            continue
-
-        m = time_re.search(stripped)
-        if m:
-            date_s, t1, t2 = m.groups()
-        else:
-            rm = rel_re.search(stripped)
-            if rm:
-                rel, _, t1, t2 = rm.groups()
-                base = datetime.now()
-                if rel.lower() == "tomorrow":
-                    base += timedelta(days=1)
-                elif rel.lower() == "yesterday":
-                    base -= timedelta(days=1)
-                date_s = base.strftime("%Y-%m-%d")
-            else:
-                # 날짜 없이 시간만 있는 줄: '11:45 - 12:30'
-                # (icalBuddy가 오늘 일정에서 날짜를 생략하는 케이스)
-                tm = re.match(r"^(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})$", stripped)
-                if not tm:
-                    continue
-                t1, t2 = tm.groups()
-                date_s = today_s
-        try:
-            s = datetime.strptime(f"{date_s} {t1}", "%Y-%m-%d %H:%M")
-            e = datetime.strptime(f"{date_s} {t2}", "%Y-%m-%d %H:%M")
-            cur["start_ts"] = int(s.timestamp())
-            cur["end_ts"] = int(e.timestamp())
-        except ValueError:
-            pass
-    return events
-
-
-def clean_attendee(raw: str) -> str:
-    """'mailto:jane.doe@company.com' → 'jane.doe'. 회의실 리소스 계정은 제외."""
-    a = raw.strip().replace("mailto:", "")
-    if not a:
-        return ""
-    # Google 회의실/리소스 캘린더 계정은 참석자가 아님
-    if "resource.calendar.google.com" in a:
-        return ""
-    if "@" in a:
-        a = a.split("@", 1)[0]
-    return a
 
 
 def sanitize_filename(name: str) -> str:
