@@ -5,8 +5,7 @@ config.env
 .venv/
 __pycache__/
 *.pyc
+.pytest_cache/
 
 # macOS
 .DS_Store
-
-.pytest_cache/

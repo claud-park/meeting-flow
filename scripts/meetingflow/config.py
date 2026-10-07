@@ -1,4 +1,6 @@
 """설정 로드와 기본값. 표준 라이브러리만 사용한다 (tick.py가 import)."""
+from __future__ import annotations
+
 import re
 from datetime import time
 from pathlib import Path
