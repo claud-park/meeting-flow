@@ -30,6 +30,9 @@ from meetingflow.config import load_config  # noqa: E402
 from meetingflow.notify import notify  # noqa: E402
 from meetingflow.calendar_io import parse_icalbuddy_events  # noqa: E402
 from meetingflow.notes import sanitize_filename  # noqa: E402
+from meetingflow import actions, calendar_io, notes as mf_notes, pending  # noqa: E402
+
+REVIEW_OPEN = Path(__file__).resolve().parent / "review-open.sh"
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -371,6 +374,36 @@ audio: "{wav_path}"
     return note_path
 
 
+# ---------- 6. 내 액션 아이템 → 타임블록 후보 ----------
+
+def queue_timeblock_candidates(cfg: dict, note_path: Path, title: str, summary: str,
+                               attendees: list, start_dt: datetime, now: datetime = None,
+                               call=None, run=None) -> Path:
+    """내 액션 아이템을 추출해 .pending 후보로 저장하고 알림을 보낸다.
+    실패해도 예외를 내지 않는다 (회의록은 이미 저장된 상태)."""
+    now = now or datetime.now()
+    try:
+        next_ev = None
+        try:
+            kw = {"run": run} if run else {}
+            next_ev = calendar_io.find_next_event(cfg, title, mf_notes.normalize_title, now, **kw)
+        except Exception as e:  # noqa: BLE001
+            print(f"[actions] 다음 차수 조회 실패, 미정으로 진행: {e}")
+        next_date = datetime.fromtimestamp(next_ev["start_ts"]).date() if next_ev else None
+        items = actions.extract_action_items(cfg, summary, attendees, start_dt.date(), next_date,
+                                             today=now.date(), call=call)
+        if not items:
+            return None
+        path = pending.new_pending(cfg, note_path, title, start_dt.date(), items, now)
+        notify("타임블록 후보 📅", f"{title}: 타임블록 후보 {len(items)}건 (클릭하면 검토)",
+               execute=str(REVIEW_OPEN), group="meetingflow-review")
+        return path
+    except Exception as e:  # noqa: BLE001
+        print(f"[actions] 후보 생성 실패: {e}")
+        notify("액션 아이템 추출 실패 ⚠️", str(e)[:100])
+        return None
+
+
 # ---------- main ----------
 
 def parse_manual_attendees(arg: str) -> tuple:
@@ -441,6 +474,9 @@ def main() -> None:
             cfg, title, start_dt, end_dt, summary, transcript, wav_path,
             attendees, projects,
         )
+
+        # 6. 내 액션 아이템 → 타임블록 후보 (실패해도 회의록은 유지)
+        queue_timeblock_candidates(cfg, note, title, summary, attendees, start_dt)
 
         state_file.unlink(missing_ok=True)
         notify("회의록 완성 ✅", f"{title} → {note.name}")
