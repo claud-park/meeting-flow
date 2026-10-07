@@ -23,7 +23,7 @@ if ! command -v brew >/dev/null 2>&1; then
   exit 1
 fi
 
-for pkg in ffmpeg ical-buddy switchaudio-osx; do
+for pkg in ffmpeg ical-buddy switchaudio-osx terminal-notifier; do
   if brew list "$pkg" >/dev/null 2>&1; then
     ok "$pkg (이미 설치됨)"
   else
@@ -48,8 +48,8 @@ if [[ ! -d .venv ]]; then
   python3 -m venv .venv
 fi
 .venv/bin/pip install --quiet --upgrade pip
-.venv/bin/pip install --quiet boto3 requests
-ok "venv + boto3, requests"
+.venv/bin/pip install --quiet boto3 requests truststore pytest
+ok "venv + boto3, requests, truststore, pytest"
 echo ""
 
 # ---------- 3. config.env 대화형 생성 ----------
@@ -92,6 +92,13 @@ echo ""
 
 chmod +x scripts/*.sh
 
+# ---------- 3.5 launchd 틱 (브리핑·재알림) ----------
+if ./scripts/install-launchd.sh; then
+  ok "launchd 틱 (com.meetingflow.tick)"
+else
+  warn "launchd 설치 실패 — 나중에 ./scripts/install-launchd.sh 를 다시 실행하세요"
+fi
+
 # ---------- 4. 남은 수동 단계 안내 ----------
 bold "[4/4] 남은 수동 단계 (GUI라 자동화 불가)"
 cat <<'GUIDE'
@@ -105,6 +112,7 @@ cat <<'GUIDE'
   ② 트리거 등록:
      - Raycast 쓰는 경우: Raycast 설정 > Extensions > + > Add Script Directory > 이 폴더의 scripts/ 선택
      - Raycast 없는 경우: ./scripts/install-quick-actions.sh 실행 (자세한 내용은 README 7-B)
+     - 어느 쪽이든 '타임블록 검토' 트리거도 함께 등록됩니다 (Quick Action은 자동, Raycast는 scripts/ 폴더에 포함)
 
   ③ 설치 검증:
      ./doctor.sh    ← 모든 연결을 자동 점검합니다
@@ -112,6 +120,10 @@ cat <<'GUIDE'
   ④ 첫 테스트:
      Raycast에서 '미팅 시작' → 30초 말하기 → '미팅 끝'
      (첫 실행 시 마이크/캘린더 권한 팝업 → 모두 허용)
+
+  ⑤ 캘린더·미리알림 자동화 권한 (1회):
+     .venv/bin/python3 -m meetingflow.calendar_io --smoke   ← scripts/ 폴더에서 실행
+     (권한 팝업이 뜨면 허용. 테스트 이벤트를 만들고 바로 지웁니다)
 
 GUIDE
 bold "설치 스크립트 완료. 다음은 ./doctor.sh 를 실행하세요."
