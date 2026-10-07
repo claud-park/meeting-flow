@@ -17,6 +17,10 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+import truststore
+
+truststore.inject_into_ssl()  # macOS 시스템 키체인의 신뢰 인증서를 그대로 사용 (회사 TLS 검사 장비 대응)
+
 import boto3
 from botocore.config import Config
 import requests
@@ -492,7 +496,7 @@ def main() -> None:
     cfg = load_config()
 
     start_ts = state["start_ts"]
-    end_ts = int(time.time())
+    end_ts = state.get("end_ts") or int(time.time())
     start_dt = datetime.fromtimestamp(start_ts)
     end_dt = datetime.fromtimestamp(end_ts)
     wav_path = Path(state["wav_path"])

@@ -1,4 +1,9 @@
 import os
+
+import truststore
+
+truststore.inject_into_ssl()  # macOS 시스템 키체인의 신뢰 인증서를 그대로 사용 (회사 TLS 검사 장비 대응)
+
 import boto3
 from botocore.config import Config
 
