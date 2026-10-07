@@ -69,14 +69,27 @@ def apply(cfg: dict, approvals: list, now: datetime, create_event=None, create_r
     create_event = create_event or calendar_io.create_calendar_event
     create_reminder = create_reminder or calendar_io.create_reminder
     vault_root = config.obsidian_dir(cfg).parent
-    result = {"applied": 0, "skipped": 0, "failed": []}
+    pdir = pending.pending_dir(cfg).resolve()
+    result = {"applied": 0, "skipped": 0, "ignored": 0, "failed": []}
     by_pending = {}
     for a in approvals:
         by_pending.setdefault(a["pending_path"], []).append(a)
 
-    for ppath, group in by_pending.items():
-        ppath = Path(ppath)
-        data = pending.load(ppath)
+    def fail_all(group, msg):
+        for a in group:
+            result["failed"].append({"id": a["id"], "error": msg})
+
+    for ppath_str, group in by_pending.items():
+        # pending_path는 요청 본문에서 오므로 pending 디렉터리 안의 .json만 허용
+        ppath = Path(ppath_str).resolve()
+        if ppath.parent != pdir or ppath.suffix != ".json":
+            fail_all(group, "잘못된 pending_path")
+            continue
+        try:
+            data = pending.load(ppath)
+        except (OSError, ValueError):
+            fail_all(group, "후보 파일을 읽을 수 없음")
+            continue
         items = {i["id"]: i for i in data["items"]}
         note_path = Path(data["note_path"])
         try:
@@ -88,17 +101,21 @@ def apply(cfg: dict, approvals: list, now: datetime, create_event=None, create_r
         for a in group:
             item = items.get(a["id"])
             if item is None:
+                result["failed"].append({"id": a["id"], "error": "알 수 없는 항목"})
+                continue
+            if item.get("applied_at") or item.get("skipped"):  # 이미 처리됨: 중복 반영 방지
+                result["ignored"] += 1
                 continue
             if not a.get("approve"):
                 pending.mark_skipped(ppath, a["id"])
                 result["skipped"] += 1
                 lines.append(format_timeblock_line(item, None, None, False))
                 continue
-            title = (a.get("title") or item["text"]).strip()
-            start = datetime.fromisoformat(a["start"])
-            end = datetime.fromisoformat(a["end"]) if a.get("end") else None
-            kind = a.get("kind") or item["kind"]
             try:
+                title = (a.get("title") or item["text"]).strip()
+                start = datetime.fromisoformat(a["start"])
+                end = datetime.fromisoformat(a["end"]) if a.get("end") else None
+                kind = a.get("kind") or item["kind"]
                 if kind == "reminder":
                     create_reminder(cfg, title, start, description)
                 else:
@@ -142,7 +159,13 @@ def make_server(cfg: dict, port: int, now_fn=datetime.now, run=None,
             self.end_headers()
             self.wfile.write(body)
 
+        def _allowed_host(self):
+            port = self.server.server_address[1]
+            return self.headers.get("Host", "") in {f"127.0.0.1:{port}", f"localhost:{port}"}
+
         def do_GET(self):
+            if not self._allowed_host():
+                return self._json(403, {"error": "forbidden host"})
             last_hit["t"] = _time.time()
             if self.path == "/health":
                 return self._json(200, {"app": "meetingflow"})
@@ -158,7 +181,11 @@ def make_server(cfg: dict, port: int, now_fn=datetime.now, run=None,
             self._json(404, {"error": "not found"})
 
         def do_POST(self):
+            if not self._allowed_host():
+                return self._json(403, {"error": "forbidden host"})
             last_hit["t"] = _time.time()
+            if self.headers.get("Content-Type", "").split(";")[0].strip() != "application/json":
+                return self._json(415, {"error": "application/json required"})
             n = int(self.headers.get("Content-Length") or 0)
             raw = self.rfile.read(n) if n else b"[]"
             if self.path == "/api/apply":
@@ -166,10 +193,10 @@ def make_server(cfg: dict, port: int, now_fn=datetime.now, run=None,
                     approvals = json.loads(raw.decode("utf-8"))
                     if demo_state is not None:
                         res = {"applied": sum(1 for a in approvals if a.get("approve")),
-                               "skipped": sum(1 for a in approvals if not a.get("approve")), "failed": []}
+                               "skipped": sum(1 for a in approvals if not a.get("approve")), "ignored": 0, "failed": []}
                     else:
                         res = apply(cfg, approvals, now_fn(), create_event, create_reminder)
-                    if res["applied"] or res["failed"]:
+                    if demo_state is None and (res["applied"] or res["failed"]):
                         send("타임블록 반영", f"{res['applied']}건 반영, {len(res['failed'])}건 실패")
                     return self._json(200, res)
                 except Exception as e:  # noqa: BLE001

@@ -38,6 +38,9 @@
 <script>
 const WD = "일월화수목금토";
 let state = null;
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const safeUrl = u => /^obsidian:\/\//.test(u || "") ? esc(u) : "#";
+const DISCONNECTED = "서버 연결이 끊겼습니다. 타임블록 검토 트리거로 다시 열어 주세요.";
 const $ = (s, el=document) => el.querySelector(s);
 const fmtDay = d => `${d.getMonth()+1}/${d.getDate()}(${WD[d.getDay()]})`;
 const pad = n => String(n).padStart(2, "0");
@@ -46,8 +49,14 @@ const dateVal = d => d ? `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getD
 const timeVal = d => d ? `${pad(d.getHours())}:${pad(d.getMinutes())}` : "";
 
 async function load() {
-  state = await (await fetch("/api/state")).json();
+  try {
+    state = await (await fetch("/api/state")).json();
+  } catch (e) {
+    $("#result").textContent = DISCONNECTED; $("#apply").disabled = false;
+    return false;
+  }
   render();
+  return true;
 }
 
 function itemRow(m, it) {
@@ -63,13 +72,13 @@ function itemRow(m, it) {
   div.innerHTML = `
     <input type="checkbox" class="ok" ${it.default_checked ? "checked" : ""}>
     <div>
-      <input type="text" class="title" value="${it.text.replace(/"/g, "&quot;")}">
+      <input type="text" class="title" value="${esc(it.text)}">
       <div class="row">
         <select class="kind"><option value="block" ${it.kind==="block"?"selected":""}>📅 타임블록</option><option value="reminder" ${it.kind==="reminder"?"selected":""}>⏰ 미리알림</option></select>
         <input type="date" class="date" value="${dateVal(s)}">
         <input type="time" class="time" step="1800" value="${timeVal(s)}">
         <select class="dur">${[30,60,90,120,180].map(v=>`<option value="${v}" ${v===dur?"selected":""}>${v}분</option>`).join("")}</select>
-        <span class="meta">기한 ${it.due || "없음"} ${badges.join(" ")}</span>
+        <span class="meta">기한 ${esc(it.due || "없음")} ${badges.join(" ")}</span>
       </div>
     </div>`;
   div.addEventListener("input", renderAgenda);
@@ -81,7 +90,7 @@ function render() {
   let n = 0;
   for (const m of state.meetings) {
     const card = document.createElement("div"); card.className = "card";
-    card.innerHTML = `<h2>${m.title} <a href="${m.note_url}">${m.meeting_date} 회의록 열기</a></h2>`;
+    card.innerHTML = `<h2>${esc(m.title)} <a href="${safeUrl(m.note_url)}">${esc(m.meeting_date)} 회의록 열기</a></h2>`;
     for (const it of m.items) { card.appendChild(itemRow(m, it)); n++; }
     list.appendChild(card);
   }
@@ -105,11 +114,11 @@ function renderAgenda() {
   const props = proposals().filter(p => p.approve && p.start);
   const days = {};
   const add = (d, html) => { const k = dateVal(d); (days[k] ||= []).push([d, html]); };
-  for (const ev of state.events) add(new Date(ev.start), `<div class="ev">${timeVal(new Date(ev.start))}-${timeVal(new Date(ev.end))} ${ev.title}</div>`);
+  for (const ev of state.events) add(new Date(ev.start), `<div class="ev">${timeVal(new Date(ev.start))}-${timeVal(new Date(ev.end))} ${esc(ev.title)}</div>`);
   for (const p of props) {
     const clash = state.events.some(ev => p.end && new Date(ev.start) < p.end && p.start < new Date(ev.end));
     const t = p.end ? `${timeVal(p.start)}-${timeVal(p.end)}` : `${timeVal(p.start)} ⏰`;
-    add(p.start, `<div class="ev mine ${clash ? "conf" : ""}">${t} ${p.title}</div>`);
+    add(p.start, `<div class="ev mine ${clash ? "conf" : ""}">${t} ${esc(p.title)}</div>`);
   }
   const base = new Date(state.now); base.setHours(0,0,0,0);
   for (let i = 0; i < 8; i++) {
@@ -123,14 +132,24 @@ $("#apply").addEventListener("click", async () => {
   const body = proposals().map(p => ({ ...p, start: p.start ? localIso(p.start) : null, end: p.end ? localIso(p.end) : null }));
   if (body.some(p => p.approve && !p.start)) { $("#result").textContent = "승인한 항목에 날짜·시간을 채워 주세요."; return; }
   $("#apply").disabled = true; $("#result").textContent = "반영 중…";
-  const res = await (await fetch("/api/apply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })).json();
-  $("#result").textContent = res.error ? `오류: ${res.error}` : `${res.applied}건 반영, ${res.skipped}건 건너뜀${res.failed.length ? `, ${res.failed.length}건 실패` : ""}`;
-  await load(); $("#apply").disabled = false;
-  if (!state.meetings.length && !res.failed.length) setTimeout(() => fetch("/api/shutdown", { method: "POST" }).then(() => window.close()), 1500);
+  let res;
+  try {
+    res = await (await fetch("/api/apply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })).json();
+  } catch (e) {
+    $("#result").textContent = DISCONNECTED; $("#apply").disabled = false; return;
+  }
+  if (res.error) { $("#result").textContent = `오류: ${res.error}`; $("#apply").disabled = false; return; }
+  const failed = (res.failed || []).length;
+  const msg = `${res.applied}건 반영, ${res.skipped}건 건너뜀${failed ? `, ${failed}건 실패` : ""}`;
+  if (!(await load())) return;
+  $("#result").textContent = msg;
+  if (state.meetings.length > 0) $("#apply").disabled = false;
+  if (!state.meetings.length && !failed) setTimeout(() => fetch("/api/shutdown", { method: "POST", headers: { "Content-Type": "application/json" } }).then(() => window.close()), 1500);
 });
 
 function localIso(d) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`; }
 load();
+setInterval(() => fetch("/health").catch(() => {}), 60000);
 </script>
 </body>
 </html>

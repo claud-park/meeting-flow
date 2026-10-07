@@ -1,6 +1,7 @@
 import json
 import shutil
 import threading
+import urllib.error
 import urllib.request
 from datetime import date, datetime
 from pathlib import Path
@@ -63,7 +64,7 @@ def test_apply_creates_records_and_moves_done(cfg):
     res = rs.apply(cfg, approvals, NOW,
                    create_event=lambda c, s, st, en, d: created.append(("ev", s, st, en, d)),
                    create_reminder=lambda c, n, due, b: created.append(("rem", n, due, b)))
-    assert res == {"applied": 2, "skipped": 2, "failed": []}
+    assert res == {"applied": 2, "skipped": 2, "ignored": 0, "failed": []}
     assert created[0][0] == "ev" and created[0][1] == "CIS 발표 자료"
     assert "obsidian://" in created[0][4] and "[11층 몰디브] STR Weekly" in created[0][4]
     assert created[1][0] == "rem"
@@ -114,5 +115,66 @@ def test_http_endpoints(cfg):
                                      headers={"Content-Type": "application/json"}, method="POST")
         with urllib.request.urlopen(req) as r:
             assert json.loads(r.read())["applied"] == 1
+    finally:
+        srv.shutdown()
+
+
+def test_apply_ignores_already_applied(cfg):
+    note, p = _setup(cfg)
+    created = []
+    approval = [{"pending_path": str(p), "id": "a1", "approve": True, "kind": "block", "title": "t",
+                 "start": "2026-10-13T16:30:00", "end": "2026-10-13T18:00:00"}]
+    ev = lambda c, s, st, en, d: created.append(s)
+    rs.apply(cfg, approval, NOW, create_event=ev, create_reminder=lambda *a: None)
+    res = rs.apply(cfg, approval, NOW, create_event=ev, create_reminder=lambda *a: None)
+    assert created == ["t"] and res["applied"] == 0 and res["ignored"] == 1
+
+
+def test_apply_rejects_foreign_pending_path(cfg, tmp_path):
+    note, p = _setup(cfg)
+    outside = tmp_path / "evil.json"
+    outside.write_text(p.read_text(encoding="utf-8"), encoding="utf-8")
+    created = []
+    res = rs.apply(cfg, [{"pending_path": str(outside), "id": "a1", "approve": True, "kind": "block",
+                          "title": "t", "start": "2026-10-13T16:30:00", "end": "2026-10-13T18:00:00"}],
+                   NOW, create_event=lambda *a: created.append(1), create_reminder=lambda *a: None)
+    assert created == [] and res["failed"] and "pending_path" in res["failed"][0]["error"]
+
+
+def test_apply_bad_start_is_isolated(cfg):
+    note, p = _setup(cfg)
+    created = []
+    res = rs.apply(cfg, [
+        {"pending_path": str(p), "id": "a1", "approve": True, "kind": "block", "title": "bad", "start": "garbage", "end": None},
+        {"pending_path": str(p), "id": "c3", "approve": True, "kind": "reminder", "title": "ok",
+         "start": "2026-10-09T09:00:00", "end": None},
+    ], NOW, create_event=lambda *a: created.append("ev"), create_reminder=lambda *a: created.append("rem"))
+    assert created == ["rem"] and res["applied"] == 1 and [f["id"] for f in res["failed"]] == ["a1"]
+    assert "- [x] 10/9(금) 09:00 · ok · ⏰" in note.read_text(encoding="utf-8")
+
+
+def test_http_rejects_bad_host_and_non_json(cfg):
+    note, p = _setup(cfg)
+    srv = rs.make_server(cfg, port=0, now_fn=lambda: NOW, run=_no_events,
+                         create_event=lambda *a: None, create_reminder=lambda *a: None,
+                         send=lambda *a, **k: None)
+    port = srv.server_address[1]
+    t = threading.Thread(target=srv.serve_forever, daemon=True); t.start()
+    try:
+        req = urllib.request.Request(f"http://127.0.0.1:{port}/api/state", headers={"Host": "evil.example"})
+        try:
+            urllib.request.urlopen(req)
+        except urllib.error.HTTPError as e:
+            assert e.code == 403
+        else:
+            raise AssertionError("403 expected")
+        req = urllib.request.Request(f"http://127.0.0.1:{port}/api/apply", data=b"[]",
+                                     headers={"Content-Type": "text/plain"}, method="POST")
+        try:
+            urllib.request.urlopen(req)
+        except urllib.error.HTTPError as e:
+            assert e.code == 415
+        else:
+            raise AssertionError("415 expected")
     finally:
         srv.shutdown()
