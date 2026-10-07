@@ -63,14 +63,16 @@ def test_extract_filters_mine_and_assigns_ids(cfg):
     assert items[2]["estimate_min"] == 0
 
 
-def test_extract_retries_once_then_gives_up(cfg):
+def test_extract_retries_once_then_raises(cfg):
+    import pytest
     calls = []
 
     def flaky(c, p):
         calls.append(p)
         return "그냥 텍스트"
-    items = actions.extract_action_items(cfg, SECTION, [], date(2026, 10, 7), None, call=flaky)
-    assert items == [] and len(calls) == 2
+    with pytest.raises(actions.ExtractionError):
+        actions.extract_action_items(cfg, SECTION, [], date(2026, 10, 7), None, call=flaky)
+    assert len(calls) == 2
     assert "JSON" in calls[1] and calls[1] != calls[0]
 
 

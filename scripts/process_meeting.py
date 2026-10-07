@@ -400,7 +400,10 @@ def queue_timeblock_candidates(cfg: dict, note_path: Path, title: str, summary: 
         return path
     except Exception as e:  # noqa: BLE001
         print(f"[actions] 후보 생성 실패: {e}")
-        notify("액션 아이템 추출 실패 ⚠️", str(e)[:100])
+        try:
+            notify("액션 아이템 추출 실패 ⚠️", str(e)[:100])
+        except Exception:  # noqa: BLE001
+            pass
         return None
 
 

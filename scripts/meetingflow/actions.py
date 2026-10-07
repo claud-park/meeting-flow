@@ -13,6 +13,10 @@ DUE_SOURCES = {"explicit", "next_meeting", "none"}
 KINDS = {"block", "reminder"}
 
 
+class ExtractionError(Exception):
+    """Claude 추출이 재시도 후에도 실패"""
+
+
 def is_mine(owner: str, my_names: list) -> bool:
     o = (owner or "").strip().lower()
     if not o:
@@ -137,7 +141,7 @@ def extract_action_items(cfg: dict, summary: str, attendees: list, meeting_date:
             print(f"[actions] 추출 실패 ({attempt + 1}/2): {e}")
             prompt = prompt + "\n\n중요: 다른 말 없이 JSON 배열만 출력하세요."
     if raw_items is None:
-        return []
+        raise ExtractionError("액션 아이템 JSON 추출 2회 실패")
     out = []
     for it in raw_items:
         if not is_mine(it["owner"], names):
