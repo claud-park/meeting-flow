@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 SERVICES_DIR="$HOME/Library/Services"
 
-if [[ ! -x "$SCRIPT_DIR/meeting-start.sh" || ! -x "$SCRIPT_DIR/meeting-end.sh" ]]; then
+if [[ ! -x "$SCRIPT_DIR/meeting-start.sh" || ! -x "$SCRIPT_DIR/meeting-end.sh" || ! -x "$SCRIPT_DIR/review-open.sh" ]]; then
   echo "scripts/meeting-start.sh, meeting-end.sh 에 실행 권한이 없습니다: chmod +x scripts/*.sh" >&2
   exit 1
 fi
@@ -191,19 +191,21 @@ EOF
 install_quick_action "미팅 시작" "\"$REPO_DIR/scripts/meeting-start.sh\"" "start"
 install_quick_action "미팅 시작 (화상)" "\"$REPO_DIR/scripts/meeting-start.sh\" 화상" "start-video"
 install_quick_action "미팅 끝" "\"$REPO_DIR/scripts/meeting-end.sh\"" "end"
+install_quick_action "타임블록 검토" "\"$REPO_DIR/scripts/review-open.sh\"" "review"
 
 /System/Library/CoreServices/pbs -flush > /dev/null 2>&1 || true
 
 cat <<'EOF'
 
-Quick Action 3개를 ~/Library/Services/ 에 설치했습니다:
+Quick Action 4개를 ~/Library/Services/ 에 설치했습니다:
   - 미팅 시작
   - 미팅 시작 (화상)
   - 미팅 끝
+  - 타임블록 검토
 
 단축키 지정:
   시스템 설정 > 키보드 > 키보드 단축키... > 서비스
-  → 위 3개 항목을 찾아 단축키를 지정하세요.
+  → 위 4개 항목을 찾아 단축키를 지정하세요.
 
 바로 실행해보려면:
   메뉴바(있다면) 또는 Finder에서 우클릭 > 서비스 메뉴에서 항목을 선택하세요.
