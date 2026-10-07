@@ -29,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # scripts/ 를 모듈 
 from meetingflow.config import load_config  # noqa: E402
 from meetingflow.notify import notify  # noqa: E402
 from meetingflow.calendar_io import parse_icalbuddy_events  # noqa: E402
+from meetingflow.notes import sanitize_filename  # noqa: E402
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -75,11 +76,6 @@ def get_meeting_info(cfg: dict, start_ts: int, end_ts: int) -> tuple:
     if best is None:
         return "회의", []
     return best["title"], best["attendees"]
-
-
-def sanitize_filename(name: str) -> str:
-    name = re.sub(r'[\\/:*?"<>|\n\r]+', "_", name).strip()
-    return name[:80] or "회의"
 
 
 # ---------- 2. Object Storage 업로드 ----------
