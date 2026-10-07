@@ -61,6 +61,12 @@ def test_parse_action_items():
     assert items[4] == {"owner": "Alex", "text": "챔피언 리스트 조정안 수령 후 협의", "done": False}
 
 
+def test_parse_action_items_ownerless_with_colon():
+    items = notes.parse_action_items("- [ ] 보안 점검 진행 (시간: 1시)\n- [ ] 오늘 3시: 리걸 QA")
+    assert items[0] == {"owner": "", "text": "보안 점검 진행 (시간: 1시)", "done": False}
+    assert items[1] == {"owner": "", "text": "오늘 3시: 리걸 QA", "done": False}
+
+
 def test_append_timeblock_section_is_idempotent(tmp_path):
     p = _copy_fixture(tmp_path)
     lines = ["- [x] 10/9(목) 14:00-15:00 · CIS 발표 자료 재구성 · 📅",

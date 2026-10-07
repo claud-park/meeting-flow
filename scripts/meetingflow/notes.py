@@ -8,7 +8,7 @@ from urllib.parse import quote
 TIMEBLOCK_HEADING = "## 📅 타임블록"
 TRANSCRIPT_HEADING_PREFIX = "## 전체 전사록"
 _NOTE_PREFIX = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{4}_")
-_ACTION_RE = re.compile(r"^- \[( |x|X)\]\s*(?:\*\*(.+?)\*\*\s*:|([^:*]{1,30}):)?\s*(.+?)\s*$")
+_ACTION_RE = re.compile(r"^- \[( |x|X)\]\s*(?:\*\*(.+?)\*\*\s*:|([^\s:*()（）]{1,30}):)?\s*(.+?)\s*$")
 
 
 def sanitize_filename(name: str) -> str:
