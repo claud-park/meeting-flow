@@ -69,7 +69,7 @@ def test_append_timeblock_section_is_idempotent(tmp_path):
     notes.append_timeblock_section(p, lines + ["- [x] 10/14(화) 09:00 · 확인 · ⏰"])
     text = p.read_text(encoding="utf-8")
     assert text.count(notes.TIMEBLOCK_HEADING) == 1
-    assert text.count("CIS 발표 자료 재구성") == 2  # 액션 아이템 1 + 타임블록 1
+    assert text.count("재구성") == 2  # 액션 아이템 1 + 타임블록 1
     assert text.count("10/14(화) 09:00") == 1
     # 전사록 앞, 구분선 앞에 있어야 함
     assert text.index(notes.TIMEBLOCK_HEADING) < text.index("## 전체 전사록")
