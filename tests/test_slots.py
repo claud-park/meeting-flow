@@ -95,3 +95,30 @@ def test_common_owner_unchecked_by_default():
     items = [_item(owner="공통")]
     out = slots.propose(items, [], {"WORK_HOURS": "10:00-18:00", "MORNING_REMIND_AT": "09:00"}, NOW)
     assert out[0]["default_checked"] is False and out[0]["proposed_start"] is not None
+
+
+def test_due_today_after_hours_has_no_proposal():
+    late = datetime(2026, 10, 7, 18, 30)
+    out = slots.propose([_item(due="2026-10-07")], [], {"WORK_HOURS": "10:00-18:00", "MORNING_REMIND_AT": "09:00"}, late)
+    assert out[0]["proposed_start"] is None and out[0]["default_checked"] is False
+    assert out[0]["overdue"] is False and out[0]["conflict"] is False
+
+
+def test_reminder_due_today_moves_to_next_grid():
+    out = slots.propose([_item(kind="reminder", estimate_min=0, due="2026-10-07")], [],
+                        {"WORK_HOURS": "10:00-18:00", "MORNING_REMIND_AT": "09:00"}, NOW)  # NOW = 11:40
+    assert out[0]["proposed_start"] == "2026-10-07T12:00:00" and out[0]["default_checked"] is True
+
+
+def test_not_before_on_grid_is_not_pushed():
+    day = date(2026, 10, 7)
+    free = slots.free_slots_for_day(day, [], WORK, 30, not_before=datetime(2026, 10, 7, 12, 0))
+    assert free[0][0] == datetime(2026, 10, 7, 12, 0)
+    free2 = slots.free_slots_for_day(day, [], WORK, 30, not_before=datetime(2026, 10, 7, 12, 10))
+    assert free2[0][0] == datetime(2026, 10, 7, 12, 30)
+
+
+def test_multiday_busy_blocks_whole_day():
+    day = date(2026, 10, 9)
+    busy = [(datetime(2026, 10, 8, 9, 0), datetime(2026, 10, 10, 9, 0))]
+    assert slots.free_slots_for_day(day, busy, WORK, 30) == []
