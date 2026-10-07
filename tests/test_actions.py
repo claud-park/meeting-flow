@@ -94,3 +94,19 @@ def test_estimate_rounded_to_30(cfg):
                        "kind": "block", "estimate_min": 45}])
     items = actions.extract_action_items(cfg, SECTION, [], date(2026, 10, 7), None, call=lambda c, p: odd)
     assert items[0]["estimate_min"] == 60
+
+
+def test_parse_items_ignores_brackets_in_prose():
+    text = "[참고] 아래는 결과입니다.\n- [ ] 원문 줄\n" + GOOD + "\n[끝]"
+    assert len(actions.parse_items(text)) == 4
+
+
+def test_extract_normalizes_due_source(cfg):
+    odd = json.dumps([{"text": "x", "owner": "Claud", "due": "2026-10-10", "due_source": "none",
+                       "kind": "block", "estimate_min": 30}])
+    items = actions.extract_action_items(cfg, SECTION, [], date(2026, 10, 7), None, call=lambda c, p: odd)
+    assert items[0]["due_source"] == "explicit"
+
+
+def test_parse_items_accepts_empty_array():
+    assert actions.parse_items("결과: []") == []

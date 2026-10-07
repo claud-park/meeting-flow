@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import re
 import uuid
 from datetime import date, datetime
 
@@ -56,16 +55,31 @@ def build_prompt(action_section: str, attendees: list, meeting_date: date,
 {action_section}"""
 
 
-def parse_items(text: str) -> list:
-    m = re.search(r"\[.*\]", text, re.S)
-    if not m:
+def _first_json_array(text: str):
+    """본문에서 첫 JSON 배열을 찾는다. `- [ ]` 같은 빈 배열 오탐을 피하기 위해
+    dict 원소로만 이뤄진 비어 있지 않은 배열을 우선하고, 없으면 첫 배열을 쓴다."""
+    dec = json.JSONDecoder()
+    first_any = None
+    for i, ch in enumerate(text):
+        if ch != "[":
+            continue
+        try:
+            obj, _ = dec.raw_decode(text, i)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(obj, list):
+            continue
+        if obj and all(isinstance(x, dict) for x in obj):
+            return obj
+        if first_any is None:
+            first_any = obj
+    if first_any is None:
         raise ValueError("JSON 배열을 찾을 수 없음")
-    try:
-        data = json.loads(m.group(0))
-    except json.JSONDecodeError as e:
-        raise ValueError(f"JSON 파싱 실패: {e}") from e
-    if not isinstance(data, list):
-        raise ValueError("배열이 아님")
+    return first_any
+
+
+def parse_items(text: str) -> list:
+    data = _first_json_array(text)
     for it in data:
         if not isinstance(it, dict) or not REQUIRED.issubset(it):
             raise ValueError(f"필드 누락: {it}")
@@ -129,13 +143,18 @@ def extract_action_items(cfg: dict, summary: str, attendees: list, meeting_date:
         if not is_mine(it["owner"], names):
             continue
         kind = it["kind"]
+        due_source = it["due_source"]
+        if it["due"] and due_source == "none":
+            due_source = "explicit"
+        elif not it["due"]:
+            due_source = "none"
         out.append({
             "id": uuid.uuid4().hex,
             "text": str(it["text"]).strip(),
             "owner": str(it["owner"]).strip(),
             "is_mine": True,
             "due": it["due"],
-            "due_source": it["due_source"] if it["due"] else "none",
+            "due_source": due_source,
             "kind": kind,
             "estimate_min": 0 if kind == "reminder" else _round30(it["estimate_min"]),
         })
