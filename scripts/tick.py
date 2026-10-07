@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -50,18 +51,21 @@ def step_renotify(cfg: dict, now: datetime, dry_run: bool, send=notify.notify) -
     remind_at = config.parse_hhmm(cfg.get("MORNING_REMIND_AT") or config.DEFAULTS["MORNING_REMIND_AT"])
     due = []
     for p in pending.list_pending(cfg):
-        data = pending.load(p)
-        if dry_run and datetime.strptime(data["created_at"], pending.ISO) + timedelta(days=expire_days) <= now:
-            continue
-        if pending.unresolved_items(data) and pending.needs_renotify(data, now, remind_at):
-            due.append((p, data))
+        try:
+            data = pending.load(p)
+            if dry_run and datetime.strptime(data["created_at"], pending.ISO) + timedelta(days=expire_days) <= now:
+                continue
+            if pending.unresolved_items(data) and pending.needs_renotify(data, now, remind_at):
+                due.append((p, data))
+        except (OSError, ValueError, KeyError) as e:
+            print(f"[pending] 후보 파일 건너뜀: {p.name} ({e})")
     if not due:
         return 0
     n = sum(len(pending.unresolved_items(d)) for _, d in due)
     print(f"[tick] 미처리 후보 {n}건 ({len(due)}개 회의) 재알림{' (dry-run)' if dry_run else ''}")
     if not dry_run:
         send("타임블록 후보 📅", f"미처리 타임블록 후보 {n}건 (클릭하면 검토)",
-             execute=str(REVIEW_OPEN), group="meetingflow-review")
+             execute=shlex.quote(str(REVIEW_OPEN)), group="meetingflow-review")
         for p, _ in due:
             pending.mark_renotified(p, now.date())
     return 1

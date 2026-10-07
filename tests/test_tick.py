@@ -120,3 +120,14 @@ def test_step_briefs_dry_run_does_not_generate(cfg):
     assert tick.step_briefs(cfg, datetime(2026, 10, 14, 9, 50), True, events=[ev],
                             generate=lambda *a: called.append(1), send=lambda *a, **k: None) == 1
     assert called == []
+
+
+def test_step_renotify_skips_corrupt_pending(cfg):
+    note = Path(cfg["OBSIDIAN_DIR"]) / "n.md"; note.write_text("x")
+    items = [{"id": "a", "text": "t", "owner": "Claud", "is_mine": True, "due": None,
+              "due_source": "none", "kind": "block", "estimate_min": 30}]
+    pending.new_pending(cfg, note, "x", date(2026, 10, 7), items, datetime(2026, 10, 7))
+    (pending.pending_dir(cfg) / "broken.json").write_text("{not json", encoding="utf-8")
+    sent = []
+    assert tick.step_renotify(cfg, datetime(2026, 10, 8, 9, 5), False, send=lambda *a, **k: sent.append(1)) == 1
+    assert sent == [1]

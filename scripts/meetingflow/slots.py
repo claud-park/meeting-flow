@@ -80,10 +80,14 @@ def _propose_block(due: date, duration_min: int, busy: list[Busy], work: tuple[t
     return end - timedelta(minutes=duration_min), end, True
 
 
-def propose(items: list[dict], events: list[dict], cfg: dict, now: datetime) -> list[dict]:
+def propose(items: list[dict], events: list[dict], cfg: dict, now: datetime,
+            busy: list[Busy] | None = None) -> list[dict]:
+    """busy를 넘기면 그 목록에 제안 구간을 이어 붙인다 (여러 회의가 서로 겹치지 않게 공유)."""
     work = config.work_hours(cfg)
     remind_at = config.parse_hhmm(cfg.get("MORNING_REMIND_AT") or config.DEFAULTS["MORNING_REMIND_AT"])
-    busy = busy_from_events(events)
+    if busy is None:
+        busy = []
+    busy.extend(busy_from_events(events))
     out = []
     for raw in items:
         it = dict(raw)

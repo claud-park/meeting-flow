@@ -6,7 +6,7 @@ import os
 import sys
 import threading
 import time as _time
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -18,20 +18,37 @@ WEEKDAY_KO = "월화수목금토일"
 
 # ---------- 상태 ----------
 
+MAX_PROPOSE_DAYS = 60
+
+
 def build_state(cfg: dict, now: datetime, run=None) -> dict:
     kw = {"run": run} if run else {}
+    today = now.date()
+    loaded = []
+    for p in pending.list_pending(cfg):
+        try:
+            data = pending.load(p)
+            items = pending.unresolved_items(data)
+        except (OSError, ValueError, KeyError) as e:
+            print(f"[pending] 후보 파일 건너뜀: {p.name} ({e})")
+            continue
+        if items:
+            loaded.append((p, data, items))
+    # 제안용 일정: 오늘부터 미처리 항목 기한 중 가장 늦은 날까지 (상한 60일). 일정판은 7일치만.
+    agenda_end = today + timedelta(days=7)
+    dues = [date.fromisoformat(i["due"]) for _, _, items in loaded for i in items if i.get("due")]
+    fetch_end = min(max([agenda_end] + dues), today + timedelta(days=MAX_PROPOSE_DAYS))
     try:
-        events = calendar_io.events_between(cfg, now.date(), now.date() + timedelta(days=7), **kw)
+        all_events = calendar_io.events_between(cfg, today, fetch_end, **kw)
     except Exception as e:  # noqa: BLE001
         print(f"[review] 일정 조회 실패: {e}")
-        events = []
+        all_events = []
+    agenda_limit = datetime.combine(agenda_end + timedelta(days=1), datetime.min.time()).timestamp()
+    events = [e for e in all_events if not e.get("start_ts") or e["start_ts"] < agenda_limit]
     vault_root = config.obsidian_dir(cfg).parent
+    busy = slots.busy_from_events(all_events)  # 회의 간 제안이 겹치지 않도록 공유
     meetings = []
-    for p in pending.list_pending(cfg):
-        data = pending.load(p)
-        items = pending.unresolved_items(data)
-        if not items:
-            continue
+    for p, data, items in loaded:
         note_path = Path(data["note_path"])
         try:
             note_url = notes.obsidian_url(cfg["OBSIDIAN_VAULT_NAME"], vault_root, note_path)
@@ -42,7 +59,7 @@ def build_state(cfg: dict, now: datetime, run=None) -> dict:
             "title": data["title"],
             "meeting_date": data["meeting_date"],
             "note_url": note_url,
-            "items": slots.propose(items, events, cfg, now),
+            "items": slots.propose(items, [], cfg, now, busy=busy),
         })
     return {
         "meetings": meetings,

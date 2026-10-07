@@ -122,3 +122,14 @@ def test_multiday_busy_blocks_whole_day():
     day = date(2026, 10, 9)
     busy = [(datetime(2026, 10, 8, 9, 0), datetime(2026, 10, 10, 9, 0))]
     assert slots.free_slots_for_day(day, busy, WORK, 30) == []
+
+
+def test_propose_shares_busy_across_calls():
+    """회의 두 개가 같은 busy 목록을 이어 쓰면 제안이 서로 겹치지 않는다."""
+    busy = []
+    a = slots.propose([_item(id="a")], [], {}, NOW, busy=busy)[0]
+    b = slots.propose([_item(id="b")], [], {}, NOW, busy=busy)[0]
+    assert a["proposed_start"] and b["proposed_start"]
+    assert (a["proposed_start"], a["proposed_end"]) != (b["proposed_start"], b["proposed_end"])
+    assert b["proposed_end"] <= a["proposed_start"] or b["proposed_start"] >= a["proposed_end"]
+    assert not b["conflict"]

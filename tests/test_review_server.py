@@ -178,3 +178,52 @@ def test_http_rejects_bad_host_and_non_json(cfg):
             raise AssertionError("415 expected")
     finally:
         srv.shutdown()
+
+
+def test_build_state_proposals_do_not_overlap_between_meetings(cfg):
+    note, p = _setup(cfg)
+    data = pending.load(p)
+    p2 = p.with_name("second.json")
+    data2 = dict(data, items=[dict(i, id="x" + i["id"]) for i in data["items"]])
+    pending.save(p2, data2)
+    st = rs.build_state(cfg, NOW, run=_no_events)
+    blocks = [i for m in st["meetings"] for i in m["items"] if i["proposed_end"]]
+    for n, a in enumerate(blocks):
+        for b in blocks[n + 1:]:
+            assert a["proposed_end"] <= b["proposed_start"] or b["proposed_end"] <= a["proposed_start"], (a, b)
+
+
+def test_build_state_queries_events_up_to_latest_due(cfg):
+    note, p = _setup(cfg)
+    data = pending.load(p)
+    data["items"][0]["due"] = "2026-10-27"  # 20일 뒤
+    pending.save(p, data)
+    cmds = []
+
+    def run(cmd, **kw):
+        cmds.append(cmd)
+        return _no_events(cmd)
+    st = rs.build_state(cfg, NOW, run=run)
+    assert any("to:2026-10-27" in c for c in cmds[0])
+    assert st["events"] == []
+
+
+def test_build_state_agenda_events_stay_within_7_days(cfg):
+    note, p = _setup(cfg)
+    data = pending.load(p)
+    data["items"][0]["due"] = "2026-10-27"
+    pending.save(p, data)
+
+    def run(cmd, **kw):
+        class R:
+            stdout = "far\n    2026-10-25 at 10:00 - 11:00\nnear\n    2026-10-09 at 10:00 - 11:00\n"
+        return R()
+    st = rs.build_state(cfg, NOW, run=run)
+    assert [e["title"] for e in st["events"]] == ["near"]
+
+
+def test_build_state_skips_corrupt_pending(cfg):
+    note, p = _setup(cfg)
+    (pending.pending_dir(cfg) / "broken.json").write_text("{not json", encoding="utf-8")
+    st = rs.build_state(cfg, NOW, run=_no_events)
+    assert [m["pending_path"] for m in st["meetings"]] == [str(p)]
