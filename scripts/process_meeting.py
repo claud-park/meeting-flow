@@ -25,41 +25,11 @@ import boto3
 from botocore.config import Config
 import requests
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # scripts/ 를 모듈 경로에
+from meetingflow.config import load_config  # noqa: E402
+from meetingflow.notify import notify  # noqa: E402
+
 SCRIPT_DIR = Path(__file__).resolve().parent
-CONFIG_PATH = SCRIPT_DIR.parent / "config.env"
-
-
-# ---------- 설정 로드 ----------
-
-def load_config() -> dict:
-    cfg = {}
-    for line in CONFIG_PATH.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, val = line.partition("=")
-        val = val.strip()
-        # 따옴표로 감싼 값이면 닫는 따옴표까지만, 아니면 인라인 주석 제거
-        m = re.match(r'^"([^"]*)"|^\'([^\']*)\'', val)
-        if m:
-            val = m.group(1) if m.group(1) is not None else m.group(2)
-        else:
-            val = val.split("#", 1)[0].strip()
-        val = val.replace("$HOME", str(Path.home()))
-        cfg[key.strip()] = val
-    return cfg
-
-
-def notify(title: str, message: str) -> None:
-    """macOS 알림"""
-    try:
-        subprocess.run(
-            ["osascript", "-e",
-             f'display notification "{message}" with title "{title}"'],
-            check=False,
-        )
-    except Exception:
-        pass
 
 
 # ---------- 1. 캘린더 이벤트명 + 참석자 조회 ----------
