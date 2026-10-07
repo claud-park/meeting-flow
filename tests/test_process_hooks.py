@@ -77,3 +77,26 @@ def test_queue_continues_when_calendar_lookup_fails(cfg, monkeypatch):
     p = pm.queue_timeblock_candidates(cfg, note, "t", SUMMARY, [], datetime(2026, 10, 7),
                                       call=lambda c, pr: GOOD, run=ical_boom)
     assert p is not None and pending.load(p)["items"][0]["due"] == "2026-10-14"
+
+
+def test_find_brief_and_block(cfg):
+    from meetingflow import brief
+    start = datetime(2026, 10, 14, 10, 5)
+    assert pm.find_brief(cfg, "[11층 몰디브] STR Weekly", start) is None
+    p = brief.brief_path(cfg, start.date(), "[11층 몰디브] STR Weekly")
+    p.parent.mkdir(parents=True); p.write_text("---\ntitle: x\n---\n\n# 브리핑\n\n## 📌 지난 결정 사항\n\n- A\n", encoding="utf-8")
+    assert pm.find_brief(cfg, "[11층 몰디브]  STR Weekly", start) == p
+    block = pm.build_brief_block(p.read_text(encoding="utf-8"))
+    assert "지난 회의" in block and "- A" in block and "title: x" not in block
+    assert pm.build_brief_block("") == ""
+
+
+def test_summarize_includes_brief_block(cfg, monkeypatch):
+    captured = {}
+
+    class R:
+        def raise_for_status(self): pass
+        def json(self): return {"content": [{"type": "text", "text": "## 요약\n\nok"}]}
+    monkeypatch.setattr(pm.requests, "post", lambda url, **kw: captured.update(kw) or R())
+    pm.summarize(cfg, "t", "전사", None, brief_text="# 브리핑\n\n- A")
+    assert "- A" in captured["json"]["messages"][0]["content"]

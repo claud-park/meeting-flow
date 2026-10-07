@@ -30,7 +30,7 @@ from meetingflow.config import load_config  # noqa: E402
 from meetingflow.notify import notify  # noqa: E402
 from meetingflow.calendar_io import parse_icalbuddy_events  # noqa: E402
 from meetingflow.notes import sanitize_filename  # noqa: E402
-from meetingflow import actions, calendar_io, notes as mf_notes, pending  # noqa: E402
+from meetingflow import actions, brief, calendar_io, notes as mf_notes, pending  # noqa: E402
 
 REVIEW_OPEN = Path(__file__).resolve().parent / "review-open.sh"
 
@@ -283,7 +283,29 @@ def extract_related_projects(summary: str, valid: set) -> list:
     return found
 
 
-def summarize(cfg: dict, title: str, transcript: str, attendees: list = None) -> str:
+def find_brief(cfg: dict, title: str, start_dt: datetime) -> Path:
+    """같은 날짜·정규화 제목의 브리핑 노트가 있으면 경로 반환"""
+    if not cfg.get("OBSIDIAN_DIR"):
+        return None
+    p = brief.brief_path(cfg, start_dt.date(), title)
+    return p if p.exists() else None
+
+
+def build_brief_block(brief_text: str) -> str:
+    if not brief_text.strip():
+        return ""
+    _, body = mf_notes.split_frontmatter(brief_text)
+    return f"""
+아래는 이 회의 직전에 만든 브리핑입니다. 지난 회의의 결정 사항과 미완료 액션 아이템이
+이번 회의에서 어떻게 진행되었는지(완료, 진행 중, 보류, 언급 없음)를 요약과 액션 아이템에 반영하세요.
+브리핑에만 있고 이번 전사록에 언급되지 않은 내용은 새 결정으로 만들지 마세요.
+
+{body.strip()}
+"""
+
+
+def summarize(cfg: dict, title: str, transcript: str, attendees: list = None,
+              brief_text: str = "") -> str:
     attendee_block = ""
     if attendees:
         attendee_block = f"""
@@ -300,8 +322,9 @@ def summarize(cfg: dict, title: str, transcript: str, attendees: list = None) ->
 
     template = load_template(cfg, title)
     project_block = build_project_block(cfg)
+    brief_block = build_brief_block(brief_text)
     prompt = f"""다음은 "{title}" 회의의 화자분리 전사록입니다. 아래 형식의 한국어 회의록으로 정리해주세요.
-{attendee_block}{project_block}
+{attendee_block}{project_block}{brief_block}
 {template}
 
 전사록:
@@ -464,8 +487,12 @@ def main() -> None:
         if not transcript:
             raise RuntimeError("전사 결과가 비어 있음")
 
-        # 4. 요약 (참석자 실명 매핑 + 관련 프로젝트 선정 포함)
-        summary = summarize(cfg, title, transcript, attendees)
+        # 4. 요약 (참석자 실명 매핑 + 관련 프로젝트 선정 + 사전 브리핑 반영)
+        brief_path = find_brief(cfg, title, start_dt)
+        brief_text = brief_path.read_text(encoding="utf-8") if brief_path else ""
+        if brief_path:
+            print(f"[brief] 사전 브리핑 반영: {brief_path.name}")
+        summary = summarize(cfg, title, transcript, attendees, brief_text)
         projects = extract_related_projects(
             summary, set(list_project_notes(cfg))
         )
@@ -477,6 +504,8 @@ def main() -> None:
             cfg, title, start_dt, end_dt, summary, transcript, wav_path,
             attendees, projects,
         )
+        if brief_path:
+            mf_notes.set_frontmatter_field(note, "brief", f'"[[{brief_path.stem}]]"')
 
         # 6. 내 액션 아이템 → 타임블록 후보 (실패해도 회의록은 유지)
         queue_timeblock_candidates(cfg, note, title, summary, attendees, start_dt)
