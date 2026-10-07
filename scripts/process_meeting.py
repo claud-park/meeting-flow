@@ -287,8 +287,24 @@ def find_brief(cfg: dict, title: str, start_dt: datetime) -> Path:
     """같은 날짜·정규화 제목의 브리핑 노트가 있으면 경로 반환"""
     if not cfg.get("OBSIDIAN_DIR"):
         return None
-    p = brief.brief_path(cfg, start_dt.date(), title)
-    return p if p.exists() else None
+    try:
+        p = brief.brief_path(cfg, start_dt.date(), title)
+        return p if p.exists() else None
+    except OSError as e:
+        print(f"[warn] 브리핑 탐색 실패: {e}")
+        return None
+
+
+def load_brief(cfg: dict, title: str, start_dt: datetime) -> tuple:
+    """브리핑 탐색·읽기. 어떤 실패도 요약을 막지 않도록 (None, "")로 폴백"""
+    try:
+        brief_path = find_brief(cfg, title, start_dt)
+        if not brief_path:
+            return None, ""
+        return brief_path, brief_path.read_text(encoding="utf-8")
+    except Exception as e:
+        print(f"[warn] 브리핑 읽기 실패, 브리핑 없이 요약합니다: {e}")
+        return None, ""
 
 
 def build_brief_block(brief_text: str) -> str:
@@ -488,8 +504,7 @@ def main() -> None:
             raise RuntimeError("전사 결과가 비어 있음")
 
         # 4. 요약 (참석자 실명 매핑 + 관련 프로젝트 선정 + 사전 브리핑 반영)
-        brief_path = find_brief(cfg, title, start_dt)
-        brief_text = brief_path.read_text(encoding="utf-8") if brief_path else ""
+        brief_path, brief_text = load_brief(cfg, title, start_dt)
         if brief_path:
             print(f"[brief] 사전 브리핑 반영: {brief_path.name}")
         summary = summarize(cfg, title, transcript, attendees, brief_text)
@@ -505,7 +520,11 @@ def main() -> None:
             attendees, projects,
         )
         if brief_path:
-            mf_notes.set_frontmatter_field(note, "brief", f'"[[{brief_path.stem}]]"')
+            try:
+                mf_notes.set_frontmatter_field(
+                    note, "brief", f'"[[{brief_path.stem}]]"')
+            except Exception as e:  # 링크는 장식일 뿐 — 실패해도 계속 진행
+                print(f"[warn] 브리핑 링크 기록 실패: {e}")
 
         # 6. 내 액션 아이템 → 타임블록 후보 (실패해도 회의록은 유지)
         queue_timeblock_candidates(cfg, note, title, summary, attendees, start_dt)

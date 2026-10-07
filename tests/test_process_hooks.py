@@ -100,3 +100,29 @@ def test_summarize_includes_brief_block(cfg, monkeypatch):
     monkeypatch.setattr(pm.requests, "post", lambda url, **kw: captured.update(kw) or R())
     pm.summarize(cfg, "t", "전사", None, brief_text="# 브리핑\n\n- A")
     assert "- A" in captured["json"]["messages"][0]["content"]
+
+
+def test_load_brief_returns_path_and_text(cfg):
+    from meetingflow import brief
+    start = datetime(2026, 10, 14, 10, 5)
+    assert pm.load_brief(cfg, "STR Weekly", start) == (None, "")
+    p = brief.brief_path(cfg, start.date(), "STR Weekly")
+    p.parent.mkdir(parents=True); p.write_text("# 브리핑\n\n- A", encoding="utf-8")
+    assert pm.load_brief(cfg, "STR Weekly", start) == (p, "# 브리핑\n\n- A")
+
+
+def test_load_brief_unreadable_falls_back(cfg, capsys):
+    from meetingflow import brief
+    start = datetime(2026, 10, 14, 10, 5)
+    p = brief.brief_path(cfg, start.date(), "STR Weekly")
+    p.parent.mkdir(parents=True); p.mkdir()  # 디렉터리 → read_text 실패
+    assert pm.load_brief(cfg, "STR Weekly", start) == (None, "")
+    assert "[warn]" in capsys.readouterr().out
+    p.rmdir(); p.write_bytes(b"\xff\xfe\x00bad")  # 잘못된 UTF-8
+    assert pm.load_brief(cfg, "STR Weekly", start) == (None, "")
+
+
+def test_load_brief_lookup_error_falls_back(cfg, monkeypatch):
+    def boom(*a, **k): raise OSError("denied")
+    monkeypatch.setattr(pm, "find_brief", boom)
+    assert pm.load_brief(cfg, "STR Weekly", datetime(2026, 10, 14, 10, 5)) == (None, "")
