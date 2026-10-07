@@ -5,8 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PYBIN="$REPO_DIR/.venv/bin/python3"
 [[ -x "$PYBIN" ]] || PYBIN="$(command -v python3)"
-MEETINGS_DIR="$(grep -E '^MEETINGS_DIR=' "$REPO_DIR/config.env" 2>/dev/null | cut -d'"' -f2 | sed "s|\$HOME|$HOME|")"
-MEETINGS_DIR="${MEETINGS_DIR:-$HOME/Meetings}"
+# 설정 파싱은 python 쪽(config.load_config)과 반드시 일치해야 하므로 직접 묻는다
+MEETINGS_DIR="$("$PYBIN" -c 'import sys; sys.path.insert(0, sys.argv[1]); from meetingflow import config; print(config.meetings_dir(config.load_config()))' "$SCRIPT_DIR")"
 mkdir -p "$MEETINGS_DIR"
 
 LABEL="com.meetingflow.tick"
