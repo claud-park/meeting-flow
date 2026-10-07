@@ -94,7 +94,12 @@ def unresolved_items(data: dict) -> list:
 def _move(path: Path, sub: str) -> Path:
     dst_dir = Path(path).parent / sub
     dst_dir.mkdir(exist_ok=True)
+    stem = Path(path).stem
     dst = dst_dir / Path(path).name
+    n = 2
+    while dst.exists():
+        dst = dst_dir / f"{stem}-{n}.json"
+        n += 1
     Path(path).replace(dst)
     return dst
 
@@ -106,7 +111,11 @@ def move_done(cfg: dict, path: Path) -> Path:
 def expire_old(cfg: dict, now: datetime, days: int) -> list:
     moved = []
     for p in list_pending(cfg):
-        created = datetime.strptime(load(p)["created_at"], ISO)
+        try:
+            created = datetime.strptime(load(p)["created_at"], ISO)
+        except (json.JSONDecodeError, KeyError, ValueError, OSError) as e:
+            print(f"[pending] 손상된 후보 파일 건너뜀: {p.name} ({e})")
+            continue
         if created + timedelta(days=days) <= now:
             moved.append(_move(p, "expired"))
             print(f"[pending] 만료: {p.name}")

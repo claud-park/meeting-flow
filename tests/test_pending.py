@@ -82,3 +82,20 @@ def test_cleanup_deletes_old_done(cfg):
     os.utime(done, (old, old))
     assert pending.cleanup(cfg, NOW, days=30) == 1
     assert not done.exists()
+
+
+def test_move_done_does_not_overwrite_existing(cfg):
+    p1 = _new(cfg)
+    d1 = pending.move_done(cfg, p1)
+    p2 = _new(cfg)  # 같은 stem이 다시 생성됨 (상위 폴더에는 충돌 없음)
+    d2 = pending.move_done(cfg, p2)
+    assert d1.exists() and d2.exists() and d1 != d2
+    assert d2.name.endswith("-2.json")
+
+
+def test_expire_old_skips_corrupt_file(cfg):
+    p = _new(cfg)
+    bad = pending.pending_dir(cfg) / "broken.json"
+    bad.write_text("{not json", encoding="utf-8")
+    moved = pending.expire_old(cfg, NOW + timedelta(days=7), days=7)
+    assert len(moved) == 1 and not p.exists() and bad.exists()
