@@ -39,9 +39,25 @@ curl -s -X POST "https://slack.com/api/users.profile.set" \
   -H "Content-Type: application/json; charset=utf-8" \
   -d '{"profile":{"status_text":"회의 중","status_emoji":":studio_microphone:","status_expiration":0}}' > /dev/null || true
 
+# Shortcuts 서비스가 멈추면 `shortcuts run`이 영원히 대기해 녹음까지 막히므로
+# (|| true 로는 못 막음) 제한 시간을 두고, 넘기면 건너뛴다.
+run_shortcut_with_timeout() {
+  local name="$1" limit="${2:-5}" pid i
+  shortcuts run "$name" > /dev/null 2>&1 &
+  pid=$!
+  disown "$pid" 2>/dev/null || true   # 강제 종료 시 bash의 'Terminated' 메시지 억제
+  for ((i = 0; i < limit; i++)); do
+    sleep 1
+    kill -0 "$pid" 2>/dev/null || return 0
+  done
+  kill "$pid" 2>/dev/null || true
+  echo "[경고] 단축어 '$name'이(가) ${limit}초 안에 응답하지 않아 건너뜀 (Shortcuts 서비스 확인)"
+  return 0
+}
+
 # 2) macOS 집중 모드 켜기 — 모든 앱 알림 차단 (녹음에 알림음 섞임 방지)
 if [[ -n "${FOCUS_SHORTCUT_ON:-}" ]]; then
-  shortcuts run "$FOCUS_SHORTCUT_ON" || true
+  run_shortcut_with_timeout "$FOCUS_SHORTCUT_ON" 5
 fi
 
 # 3) 화상 모드면 시스템 출력을 다중 출력 장치로 전환

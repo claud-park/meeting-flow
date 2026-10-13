@@ -44,9 +44,25 @@ if [[ "$MODE" == "video" ]] && command -v SwitchAudioSource >/dev/null 2>&1; the
   [[ -n "$RESTORE_TO" ]] && SwitchAudioSource -t output -s "$RESTORE_TO" || true
 fi
 
+# Shortcuts 서비스가 멈추면 `shortcuts run`이 영원히 대기해 녹음까지 막히므로
+# (|| true 로는 못 막음) 제한 시간을 두고, 넘기면 건너뛴다.
+run_shortcut_with_timeout() {
+  local name="$1" limit="${2:-5}" pid i
+  shortcuts run "$name" > /dev/null 2>&1 &
+  pid=$!
+  disown "$pid" 2>/dev/null || true   # 강제 종료 시 bash의 'Terminated' 메시지 억제
+  for ((i = 0; i < limit; i++)); do
+    sleep 1
+    kill -0 "$pid" 2>/dev/null || return 0
+  done
+  kill "$pid" 2>/dev/null || true
+  echo "[경고] 단축어 '$name'이(가) ${limit}초 안에 응답하지 않아 건너뜀 (Shortcuts 서비스 확인)"
+  return 0
+}
+
 # 3) macOS 집중 모드 끄기
 if [[ -n "${FOCUS_SHORTCUT_OFF:-}" ]]; then
-  shortcuts run "$FOCUS_SHORTCUT_OFF" || true
+  run_shortcut_with_timeout "$FOCUS_SHORTCUT_OFF" 5
 fi
 
 # 4) Slack DND 해제 + 상태 초기화
