@@ -87,7 +87,7 @@ fi
 echo ""
 echo "  사용 가능한 캘린더 목록:"
 icalBuddy calendars 2>/dev/null | sed 's/^/    /' || warn "icalBuddy 실행 실패 — 캘린더 권한 허용 후 재시도"
-echo "  → config.env의 CALENDAR_NAME에 위 목록 중 회사 캘린더 이름을 정확히 입력하세요."
+echo "  → config.env의 CALENDAR_NAME에 위 목록 중 회사 캘린더 이름을 정확히 입력하세요. (여럿이면 쉼표로 나열)"
 echo ""
 
 chmod +x scripts/*.sh

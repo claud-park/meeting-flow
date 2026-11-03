@@ -74,8 +74,20 @@ def my_names(cfg: dict) -> list:
     return [n.strip() for n in cfg.get("MY_NAMES", "").split(",") if n.strip()]
 
 
+def calendar_names(cfg: dict) -> list:
+    """CALENDAR_NAME은 쉼표로 여러 캘린더를 나열할 수 있다 (icalBuddy -ic 형식)."""
+    return [n.strip() for n in cfg.get("CALENDAR_NAME", "").split(",") if n.strip()]
+
+
+def icalbuddy_calendars(cfg: dict) -> str:
+    """icalBuddy -ic 에 넘길 쉼표 구분 문자열 (공백 정리)."""
+    return ",".join(calendar_names(cfg))
+
+
 def timeblock_calendar(cfg: dict) -> str:
-    return cfg.get("TIMEBLOCK_CALENDAR") or cfg.get("CALENDAR_NAME", "")
+    """타임블록을 쓸 캘린더. 비우면 CALENDAR_NAME의 첫 번째 캘린더."""
+    names = calendar_names(cfg)
+    return cfg.get("TIMEBLOCK_CALENDAR") or (names[0] if names else "")
 
 
 def parse_hhmm(s: str) -> time:

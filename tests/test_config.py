@@ -41,3 +41,13 @@ def test_briefs_dir_under_obsidian(cfg):
 def test_parse_hhmm():
     assert config.parse_hhmm("9:05") == time(9, 5)
     assert config.parse_hhmm("18:00") == time(18, 0)
+
+
+def test_calendar_names_splits_commas(tmp_path):
+    from meetingflow import config
+    p = tmp_path / "config.env"
+    p.write_text('CALENDAR_NAME="a@x.com, b@y.com"\n', encoding="utf-8")
+    cfg = config.load_config(p)
+    assert config.calendar_names(cfg) == ["a@x.com", "b@y.com"]
+    assert config.icalbuddy_calendars(cfg) == "a@x.com,b@y.com"
+    assert config.timeblock_calendar(cfg) == "a@x.com"

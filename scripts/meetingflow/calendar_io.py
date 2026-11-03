@@ -80,7 +80,7 @@ def parse_icalbuddy_events(out: str, today: date | None = None) -> list[dict]:
 
 
 def run_icalbuddy(cfg: dict, args: list[str], run=subprocess.run) -> str:
-    cmd = ICALBUDDY_BASE + ["-ic", cfg["CALENDAR_NAME"]] + args
+    cmd = ICALBUDDY_BASE + ["-ic", config.icalbuddy_calendars(cfg)] + args
     try:
         res = run(cmd, capture_output=True, text=True, timeout=30)
         stderr = (getattr(res, "stderr", "") or "").strip()

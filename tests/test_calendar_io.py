@@ -122,3 +122,15 @@ def test_run_icalbuddy_logs_failure(capsys):
     out = cal.run_icalbuddy({"CALENDAR_NAME": "c"}, ["eventsToday"], run=lambda *a, **k: R())
     assert out == ""
     assert "[calendar] icalBuddy returncode=1 stderr=calendar access denied" in capsys.readouterr().out
+
+
+def test_run_icalbuddy_includes_all_calendars(cfg):
+    cfg["CALENDAR_NAME"] = "work@example.com, other@bstage.com"
+    seen = []
+
+    def fake_run(cmd, **kw):
+        seen.append(cmd)
+        class R: stdout = ""
+        return R()
+    cal.events_today(cfg, run=fake_run)
+    assert seen[0][seen[0].index("-ic") + 1] == "work@example.com,other@bstage.com"

@@ -31,7 +31,7 @@ from meetingflow.config import load_config  # noqa: E402
 from meetingflow.notify import notify  # noqa: E402
 from meetingflow.calendar_io import parse_icalbuddy_events  # noqa: E402
 from meetingflow.notes import sanitize_filename  # noqa: E402
-from meetingflow import actions, brief, calendar_io, notes as mf_notes, pending  # noqa: E402
+from meetingflow import actions, brief, calendar_io, config, notes as mf_notes, pending  # noqa: E402
 
 REVIEW_OPEN = Path(__file__).resolve().parent / "review-open.sh"
 
@@ -54,7 +54,7 @@ def get_meeting_info(cfg: dict, start_ts: int, end_ts: int) -> tuple:
         "-iep", "title,datetime,attendees",
         "-df", "%Y-%m-%d",   # 날짜 포맷 고정 (파싱용)
         "-tf", "%H:%M",      # 시간 포맷 고정
-        "-ic", cfg["CALENDAR_NAME"],
+        "-ic", config.icalbuddy_calendars(cfg),
         "eventsToday",
     ]
     try:

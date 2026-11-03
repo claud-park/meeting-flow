@@ -67,6 +67,8 @@ Slack DND는 Slack 알림만 막으므로, 녹음(특히 화상 모드의 시스
 icalBuddy calendars
 ```
 목록에서 회사 계정 캘린더의 정확한 이름을 `CALENDAR_NAME`에 입력.
+계정이 여럿이면 쉼표로 나열한다 (예: `a@x.com,b@y.com`). 회의 검색은 모든 캘린더에서 하고,
+타임블록은 `TIMEBLOCK_CALENDAR`가 비어 있으면 첫 번째 캘린더에 만든다.
 (Mac 캘린더 앱에 회사 Google 계정이 연동되어 있어야 함: 시스템 설정 > 인터넷 계정)
 
 > 처음 실행 시 macOS가 캘린더 접근 권한을 물으면 허용. 터미널/Raycast에
